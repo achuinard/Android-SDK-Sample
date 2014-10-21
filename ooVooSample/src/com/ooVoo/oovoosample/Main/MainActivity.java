@@ -17,29 +17,38 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.Toast;
 
 import com.ooVoo.oovoosample.ConferenceManager;
 import com.ooVoo.oovoosample.ConferenceManager.SessionListener;
 import com.ooVoo.oovoosample.R;
+import com.ooVoo.oovoosample.SessionUIPresenter;
 import com.ooVoo.oovoosample.Common.AlertsManager;
+import com.ooVoo.oovoosample.Common.ParticipantHolder.RenderViewData;
+import com.ooVoo.oovoosample.Common.ParticipantVideoSurface;
+import com.ooVoo.oovoosample.Common.ParticipantsManager;
 import com.ooVoo.oovoosample.Common.Utils;
 import com.ooVoo.oovoosample.Settings.SettingsActivity;
 import com.ooVoo.oovoosample.Settings.UserSettings;
 import com.ooVoo.oovoosample.VideoCall.VideoCallActivity;
 import com.oovoo.core.IConferenceCore.ConferenceCoreError;
-import com.oovoo.core.Utils.LogSdk;
 
 // Main presenter entity
 public class MainActivity extends Activity implements OnClickListener,
-		SessionListener {
+		SessionListener, SessionUIPresenter {
 
 	private static final String TAG = MainActivity.class.getName();
 	private ConferenceManager mConferenceManager = null;
@@ -47,6 +56,10 @@ public class MainActivity extends Activity implements OnClickListener,
 	private EditText mDisplayNameView = null;
 	private Button mJoinButton = null;
 	private ProgressDialog mWaitingDialog = null;
+	private ParticipantVideoSurface mPreviewSurface;
+	private Boolean isInitialized = false;
+	private RenderViewData mRenderViewData = null;
+	private boolean isJoining = false;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -58,29 +71,46 @@ public class MainActivity extends Activity implements OnClickListener,
 	}
 
 	protected void initView() {
-		LogSdk.i(TAG, "Setup views ->");
+		Log.i(TAG, "Setup views ->");
 		// Set layout
 		setContentView(R.layout.main);
 		// Register for button press
 		Object obj = findViewById(R.id.joinButton1);
 		mJoinButton = (Button) obj;
 		mJoinButton.setOnClickListener(this);
-
+		mJoinButton.setEnabled(false);
+		
 		// Retrieve and display SDK version
 		mSessionIdView = (EditText) findViewById(R.id.sessionIdText);
 		mDisplayNameView = (EditText) findViewById(R.id.displayNameText);
-				
+		
+		mPreviewSurface = (ParticipantVideoSurface)findViewById(R.id.preview_layout_id);
+		mPreviewSurface.avatar = ((ImageView) findViewById(R.id.myAvatar));
+		mPreviewSurface.mVideoView = ((android.opengl.GLSurfaceView) findViewById(R.id.myVideoSurface));
+		
+		showAvatar();
+			
 		ActionBar ab = getActionBar();
 		if(ab != null){
 			ab.setIcon(R.drawable.ic_main);
 		}		
-		LogSdk.i(TAG, "<- Setup views");
+		Log.i(TAG, "<- Setup views");
+	}
+	
+	private void showAvatar() {
+		mPreviewSurface.avatar.setVisibility(View.VISIBLE);
+	}
+	
+	private void hideAvatar() {
+		mPreviewSurface.avatar.setVisibility(View.INVISIBLE);
+		mPreviewSurface.mVideoView.setVisibility(View.VISIBLE);
 	}
 	
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 	    MenuInflater inflater = getMenuInflater();
 	    inflater.inflate(R.menu.main_menu, menu);
+	    
 	    return true;
 	}
 	
@@ -91,22 +121,28 @@ public class MainActivity extends Activity implements OnClickListener,
 
 		switch (item.getItemId()) {			
 			case R.id.menu_settings:
+				if (!isInitialized) {
+					Toast.makeText(getApplicationContext(), R.string.initialization_wait, Toast.LENGTH_SHORT).show();
+				}
+
 				startActivity(SettingsActivity.class);
+		
 				return true;
 		}
 		return super.onOptionsItemSelected(item);
 	}
 
 	private void initConferenceManager() {
-		LogSdk.setLogLevel(Log.INFO);
-		if( mConferenceManager == null) {
-			LogSdk.i(TAG, "Init ConferenceManager");
-			mConferenceManager = ConferenceManager.getInstance(getApplicationContext());
-
+		if (!isInitialized) {
+			if( mConferenceManager == null) {
+				Log.i(TAG, "Init ConferenceManager");
+				mConferenceManager = ConferenceManager.getInstance(getApplicationContext());
+			}
+			
+			mConferenceManager.removeSessionListener(this);
+			mConferenceManager.addSessionListener(this);
 			mConferenceManager.initConference();
 		}
-		else
-			LogSdk.d(TAG, "ConferenceManager already initialized");
 	}
 
 	public String getAppVersion() {
@@ -115,7 +151,7 @@ public class MainActivity extends Activity implements OnClickListener,
 			versionName = this.getPackageManager().getPackageInfo(
 					this.getPackageName(), 0).versionName;
 		} catch (NameNotFoundException e) {
-			LogSdk.e(TAG, "", e);
+			Log.e(TAG, "", e);
 		}
 		return versionName;
 	}
@@ -128,7 +164,7 @@ public class MainActivity extends Activity implements OnClickListener,
 				return true;
 			}
 		} catch (Exception e) {
-			LogSdk.d(Utils.getOoVooTag(),
+			Log.d(Utils.getOoVooTag(),
 					"An exception while trying to find internet connectivity: "
 							+ e.getMessage());
 			// probably connectivity problem so we will return false
@@ -140,21 +176,36 @@ public class MainActivity extends Activity implements OnClickListener,
 	public void onClick(View v) {	
 		if(v == null)
 			return;
-		switch(v.getId()){
-			case R.id.joinButton1:
-				onJoinSession();
-				break;
-		}
 		
-	}
-	
-	private void onJoinSession(){
 		if (!isOnline()) {
-			Utils.ShowMessageBox(this, "No Internet",
-					"There is no internet connectivity, Turn WIFI on and try again");
+			Utils.ShowMessageBox(this, "Network Error",
+					"No Internet Connection. Please check your internet connection or try again later.");
 			return;
 		}
-		saveSettings();		
+		
+		switch(v.getId()){
+			case R.id.joinButton1:
+
+				if (mConferenceManager.isSdkInitialized()) {
+					onJoinSession();
+				} else {
+					Toast.makeText(getApplicationContext(), R.string.initialization_wait, Toast.LENGTH_SHORT).show();			    
+				    initConferenceManager();
+				}
+				break;
+		}
+	}
+	
+	private synchronized void onJoinSession() {
+		
+		if (isJoining) {
+			return;
+		}
+		
+		isJoining = true;
+
+		saveSettings();	
+
 		// Join session
 		mJoinButton.setEnabled(false);
 		showWaitingMessage();
@@ -167,12 +218,13 @@ public class MainActivity extends Activity implements OnClickListener,
 //	}
 
 	@Override
-	protected void onResume() {
+	public synchronized void onResume() {
 		super.onResume();
-		LogSdk.i(TAG, "onResume ->");
-		mConferenceManager.addSessionListener(this);
+		Log.i(TAG, "onResume ->");
+		
 		// Read settings
 		UserSettings settings = mConferenceManager.retrieveSettings();
+			
 		try {
 			// Fill views
 			mSessionIdView.setText(settings.SessionID);
@@ -180,15 +232,27 @@ public class MainActivity extends Activity implements OnClickListener,
 
 			// reseting the resolution config
 			//settings.Resolution = CameraResolutionLevel.ResolutionHigh;
-			LogSdk.i(TAG, "persistSettings ->");
+			Log.i(TAG, "persistSettings ->");
 			mConferenceManager.persistSettings(settings);
 
-			LogSdk.i(TAG, "<- persistSettings");
+			Log.i(TAG, "<- persistSettings");
 
-			LogSdk.i(TAG, "loadDataFromSettings ->");
+			Log.i(TAG, "loadDataFromSettings ->");
 			mConferenceManager.loadDataFromSettings();
-			LogSdk.i(TAG, "<- loadDataFromSettings");
-
+			Log.i(TAG, "<- loadDataFromSettings");
+			
+			mConferenceManager.removeSessionListener(this);
+			mConferenceManager.addSessionListener(this);
+			
+			if (isInitialized) {
+				
+	    		initPreview(mPreviewSurface);
+			
+				mConferenceManager.resumePreviewSession();
+				
+				mJoinButton.setEnabled(true);
+			}
+			
 		} catch (Exception e) {
 			AlertsManager.getInstance().addAlert(
 					"An Error occured while trying to select Devices");
@@ -203,13 +267,36 @@ public class MainActivity extends Activity implements OnClickListener,
 	}
 
 	@Override
-	protected void onPause() {
+	public void onPause() {
 		super.onPause();
+
 		// mModel.unregisterFromEvents();
+		if (isInitialized)
+			mConferenceManager.pauseSession();
+
 		mConferenceManager.removeSessionListener(this);
+
+		isInitialized = true;
 		saveSettings();
 	}
+	
+	public synchronized void initPreview(ParticipantVideoSurface participantsVideoSurface) {
 
+		try {
+			mConferenceManager.setSessionUIPresenter(this);
+
+			ParticipantsManager mParticipantsManager = mConferenceManager.getParticipantsManager();
+		
+			if (mRenderViewData == null)
+				mRenderViewData = mParticipantsManager.getHolder().addGLView(participantsVideoSurface.mVideoView.getId());
+			else
+				 mParticipantsManager.getHolder().updateGLPreview(participantsVideoSurface.mVideoView.getId(), mRenderViewData);
+		
+		} catch (Exception e) {
+			Log.e(Utils.getOoVooTag(), "", e);
+		}
+	}
+	
 	private void saveSettings() {
 		UserSettings settingsToPersist = mConferenceManager.retrieveSettings();
 		settingsToPersist.SessionID = mSessionIdView.getText().toString();
@@ -223,8 +310,7 @@ public class MainActivity extends Activity implements OnClickListener,
 	private void switchToVideoCall() {
 		runOnUiThread(new Runnable() {
 			@Override
-			public void run() {
-				mJoinButton.setEnabled(true);
+			public void run() {				
 				hideWaitingMessage(); 
 				startActivity(VideoCallActivity.class);
 			}
@@ -275,31 +361,27 @@ public class MainActivity extends Activity implements OnClickListener,
 	public void onSessionError(ConferenceCoreError error) {
 		String errorMsg = "An Error occured";
 		showErrorMessage("Error", errorMsg);
+		isJoining = false;
 	}
 
 	@Override
 	public void onSessionIDGenerated(String sSessionId) {
-		LogSdk.d(Utils.getOoVooTag(), "OnSessionIdGenerated called with: "
+		Log.d(Utils.getOoVooTag(), "OnSessionIdGenerated called with: "
 				+ sSessionId);
 	}
 
 	@Override
 	public void onJoinSessionSucceeded() {
 		switchToVideoCall();
+		isJoining = false;
 	}
 
 	@Override
 	public void onJoinSessionError(final ConferenceCoreError error) {
-		LogSdk.e(TAG, "onJoinSessionError: " + error);
-		
-		if(error == ConferenceCoreError.AppIdNotValid)
-		{
-			showErrorMessage("ooVoo SDK: Join Conference","Error: AppID invalid, might be empty.\n\n Get your App ID and App Token at http://developer.oovoo.com. Go to settings screen and set the values, or set constants in AndroidManifest.xml.");		
-			}
-		else
-		{
-			showErrorMessage("Join Conference","Error while trying to join conference. " + mConferenceManager.getErrorMessageForConferenceCoreError( error));		
-		}
+		Log.e(TAG, "onJoinSessionError: " + error);
+		isJoining = false;
+		showErrorMessage("Join Session",
+				"Error while trying to join session. " + mConferenceManager.getErrorMessageForConferenceCoreError( error));
 	}
 
 	@Override
@@ -311,4 +393,59 @@ public class MainActivity extends Activity implements OnClickListener,
 	public void onLeftSession(ConferenceCoreError error) {
 	}
 
+	@Override
+	public synchronized void onSessionInited() {
+
+		runOnUiThread(new Runnable() {
+	        @Override
+	        public void run() {
+			
+	        	try {
+	        		Log.i(TAG, "loadDataFromSettings ->");
+	    			mConferenceManager.loadDataFromSettings();
+	    			Log.i(TAG, "<- loadDataFromSettings");
+
+	        		initPreview(mPreviewSurface);
+
+	        		mConferenceManager.resumePreviewSession();
+	        		
+					isInitialized = true;
+					mJoinButton.setEnabled(true);
+					
+				} catch (Exception e) {
+					Log.e(TAG, "", e);
+				}
+	        }
+		});
+	}
+
+	@Override
+	public void updateParticipantSurface(final int participantViewId,
+			String displayName, final boolean isVideoOn) {
+
+		runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				hideAvatar();
+			}
+		});
+	}
+
+	@Override
+	public void initSurfaces() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onFullModeChanged(int id) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onMultiModeChanged() {
+		// TODO Auto-generated method stub
+		
+	}
 }

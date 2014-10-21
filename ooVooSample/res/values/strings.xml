@@ -53,6 +53,8 @@
   <string name="base_url_settings_field">BaseURL</string>
   <string name="message_field_hint">"Write here"</string>
   <string name="message_button_send">"Send"</string>
+  <string name="log_level">"SDK Log Level"</string>
+  <string name="initialization_wait">"Initialization, please wait"</string>
   
 
 </resources>

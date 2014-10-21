@@ -1,7 +1,5 @@
 package com.ooVoo.oovoosample.Messenger;
 
-import java.util.ArrayList;
-
 import android.content.Context;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -12,6 +10,8 @@ import android.widget.LinearLayout.LayoutParams;
 import android.widget.TextView;
 
 import com.ooVoo.oovoosample.R;
+
+import java.util.ArrayList;
 
 public class MessengerAdapter extends BaseAdapter {
 

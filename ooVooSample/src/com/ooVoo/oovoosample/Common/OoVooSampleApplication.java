@@ -25,6 +25,4 @@ public class OoVooSampleApplication extends Application
 	 {
 		 return mInstance.getResources();	  
 	 }
-	 
-	 
 }

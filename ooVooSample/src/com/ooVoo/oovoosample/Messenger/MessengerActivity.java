@@ -1,20 +1,21 @@
 package com.ooVoo.oovoosample.Messenger;
 
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-
 import android.app.ActionBar;
 import android.app.ListActivity;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 
+import com.ooVoo.oovoosample.Common.Utils;
 import com.ooVoo.oovoosample.ConferenceManager;
 import com.ooVoo.oovoosample.R;
-import com.ooVoo.oovoosample.Common.Utils;
 import com.oovoo.core.Utils.LogSdk;
+
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 
 public class MessengerActivity extends ListActivity implements IMessengerListener {
 	
@@ -82,7 +83,7 @@ public class MessengerActivity extends ListActivity implements IMessengerListene
 			try {
 				MessengerController.getInstance().sendText(newMessage.getBytes("UTF-8"), new String());
 			} catch (UnsupportedEncodingException e) {
-				LogSdk.d(Utils.getOoVooTag(), "Unsupported encoding.");
+				Log.d(Utils.getOoVooTag(), "Unsupported encoding.");
 			}
 		}
 	}

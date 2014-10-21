@@ -7,6 +7,8 @@
 //
 package com.ooVoo.oovoosample.Common;
 
+import com.oovoo.core.Utils.LogSdk;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -14,8 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.oovoo.core.Utils.LogSdk;
-
+import android.util.Log;
 public class AlertsManager {
 	private static final String TAG = AlertsManager.class.getSimpleName();
 	
@@ -40,32 +41,32 @@ public class AlertsManager {
 		String timeStamp = mFormat.format(Calendar.getInstance().getTime());
 		String alert = timeStamp + " " + text; 
 		
-		LogSdk.d(TAG,"addAlert - adding message: " + alert);
+		Log.d(TAG,"addAlert - adding message: " + alert);
 		
 		mAlerts.add( alert);
 		
 		for (IAlertsListener listener : mListeners) 
 		{
-			LogSdk.d(TAG,"addAlert - notifying listener:"+listener.getClass().getName()+"| message:"+alert);
+			Log.d(TAG,"addAlert - notifying listener:"+listener.getClass().getName()+"| message:"+alert);
 			listener.OnAlert(text);
 		}
 	}	
 	
 	public synchronized List<String> GetAlerts()
 	{
-		LogSdk.d(TAG,"GetAlerts");
+		Log.d(TAG,"GetAlerts");
 		
 		return mAlerts;
 	}
 	
 	public void addListener(IAlertsListener listener) {
 		mListeners.add(listener);
-		LogSdk.d(TAG,"addListener - listener:"+listener.getClass().getName());
+		Log.d(TAG,"addListener - listener:"+listener.getClass().getName());
 	}
 	
 	public void removeListener(IAlertsListener listener) {
 		mListeners.remove(listener); 
-		LogSdk.d(TAG,"IAlertsListener - listener:"+listener.getClass().getName());
+		Log.d(TAG,"IAlertsListener - listener:"+listener.getClass().getName());
 	}
 	
 	public synchronized void clearAlerts()

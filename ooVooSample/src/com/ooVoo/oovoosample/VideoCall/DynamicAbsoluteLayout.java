@@ -10,11 +10,12 @@ package com.ooVoo.oovoosample.VideoCall;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
-import com.oovoo.core.Utils.LogSdk;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.ooVoo.oovoosample.R;
+import com.oovoo.core.Utils.LogSdk;
 
 /**
  * A layout that lets you specify exact locations (x/y coordinates) of its
@@ -80,7 +81,7 @@ public class DynamicAbsoluteLayout extends ViewGroup {
 			measuredHeight = resolveSize(maxHeight, heightMeasureSpec);
 			setMeasuredDimension(measuredWidth, measuredHeight);
 		} catch (Exception ex) {
-			LogSdk.e("","",ex);
+			Log.e("","",ex);
 		}
 	}
 
@@ -116,7 +117,7 @@ public class DynamicAbsoluteLayout extends ViewGroup {
 				}
 			}
 		} catch (Exception ex) {
-			LogSdk.e("","",ex);
+			Log.e("","",ex);
 		}
 	}
 

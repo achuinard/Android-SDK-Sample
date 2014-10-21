@@ -8,17 +8,18 @@
 package com.ooVoo.oovoosample.Common;
 
 
+import android.util.Log;
+
+import com.ooVoo.oovoosample.Common.ParticipantHolder.VideoParticipant;
+import com.oovoo.core.ConferenceCore.FrameSize;
+import com.oovoo.core.IConferenceCore.ConferenceCoreError;
+import com.oovoo.core.Utils.LogSdk;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-
-import com.oovoo.core.Utils.LogSdk;
-
-import com.ooVoo.oovoosample.Common.ParticipantHolder.VideoParticipant;
-import com.oovoo.core.ConferenceCore.FrameSize;
-import com.oovoo.core.IConferenceCore.ConferenceCoreError;
 
 
 public class ParticipantsManager{
@@ -38,7 +39,7 @@ public class ParticipantsManager{
 		}
 		catch(Exception ex)
 		{			
-			LogSdk.e(Utils.getOoVooTag(),"OnParticipantJoinedSession - error while adding participant",ex);
+			Log.e(Utils.getOoVooTag(),"OnParticipantJoinedSession - error while adding participant",ex);
 		}
 	}
 	

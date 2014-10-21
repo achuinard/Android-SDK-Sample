@@ -13,17 +13,19 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Bundle;
+import android.util.Log;
 
-import com.ooVoo.oovoosample.R;
 import com.ooVoo.oovoosample.Common.Utils;
+import com.ooVoo.oovoosample.R;
 import com.oovoo.core.IConferenceCore;
 import com.oovoo.core.IConferenceCore.CameraResolutionLevel;
+import com.oovoo.core.IConferenceCore.LogLevel;
 import com.oovoo.core.Utils.LogSdk;
 
 // Manages saving & loading of the UserSettings class
 public class UserSettingsManager 
 {
-	private static final String BASE_BE_URL_DEFAULT = "https://api-sdk.dev.oovoo.com";
+	private static final String BASE_BE_URL_DEFAULT = "https://api-sdk.oovoo.com";
 	private static UserSettings mSettings;
 	public Context mContext;
 	
@@ -37,7 +39,7 @@ public class UserSettingsManager
 	{ 
 		if (mSettings == null)
 		{
-			LogSdk.d(Utils.getOoVooTag(), "Reading user settings from repository...");
+			Log.d(Utils.getOoVooTag(), "Reading user settings from repository...");
 			String AppId = null;
 			String AppToken = null;
 			try 
@@ -47,10 +49,10 @@ public class UserSettingsManager
 				Bundle bundle = ai.metaData;
 				AppId = bundle.getString(IConferenceCore.AppIdProp);
 				AppToken = bundle.getString( IConferenceCore.AppTokenProp);
-				LogSdk.d(Utils.getOoVooTag(), "Retrieved App meta-data settings: AppId = " + AppId + " AppToken = " + AppToken);
+				Log.d(Utils.getOoVooTag(), "Retrieved App meta-data settings: AppId = " + AppId + " AppToken = " + AppToken);
 			} catch (NameNotFoundException e) 
 			{
-				LogSdk.e(Utils.getOoVooTag(), "Error retrieving configuration!");
+				Log.e(Utils.getOoVooTag(), "Error retrieving configuration!");
 				e.printStackTrace();
 			}
 		    mSettings = new UserSettings();
@@ -60,12 +62,13 @@ public class UserSettingsManager
 			mSettings.AppId = sharedPref.getString(mContext.getResources().getString(R.string.appIdPersisted), AppId);
 			mSettings.AppToken = sharedPref.getString(mContext.getResources().getString(R.string.appTokenPersisted), AppToken);
 			mSettings.CameraType = sharedPref.getInt(mContext.getResources().getString(R.string.camera_type_settings_field), 1);	        
-			mSettings.MicrophoneType = sharedPref.getInt(mContext.getResources().getString(R.string.microphone_type_settings_field), 0);
+			mSettings.MicrophoneType = sharedPref.getInt(mContext.getResources().getString(R.string.microphone_type_settings_field), 1);
 			mSettings.SpeakersType = sharedPref.getInt(mContext.getResources().getString(R.string.speakers_type_settings_field), 2);
 			mSettings.UserID=sharedPref.getString(mContext.getResources().getString(R.string.usrID), "");
 			mSettings.DisplayName=sharedPref.getString(mContext.getResources().getString(R.string.displayName), "");
 			String res=sharedPref.getString(mContext.getResources().getString(R.string.resolution), CameraResolutionLevel.ResolutionMedium.toString());
 			mSettings.Resolution=CameraResolutionLevel.valueOf(res);
+			mSettings.CurrentLogLevel = LogLevel.fromString(sharedPref.getString(mContext.getResources().getString(R.string.log_level), LogLevel.Debug.toString()));
 
 			if(mSettings.BaseURL.equals(""))
 			{
@@ -83,8 +86,20 @@ public class UserSettingsManager
 			{
 				mSettings.SessionID = "TEST_SESSION_123";
 			}
+			if(mSettings.AppId.equals(""))
+			{
+				mSettings.AppId="9983350480";
+			}
+			if(mSettings.AppToken.equals(""))
+			{
+				mSettings.AppId="MDAxMDAxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACzL65x/X8c0RKpJ4E+cAArZQ/qhm1SsUdPAn4opnTtCp2j6xuvd4rIOL2OI6UOwXEWPb6+C4ukc1GOxGqwykh4RLB6DFgifGQNeAM2CtUISQ==";
+			}
+			if(mSettings.CurrentLogLevel == LogLevel.None )
+			{
+				mSettings.CurrentLogLevel = LogLevel.Debug;
+			}
 		}		
-		LogSdk.d(Utils.getOoVooTag(), "Retrieved user settings: " + mSettings);
+		Log.d(Utils.getOoVooTag(), "Retrieved user settings: " + mSettings);
 		return mSettings.Clone();
 	}
 
@@ -95,7 +110,7 @@ public class UserSettingsManager
 		if (!toPersist.equals(mSettings))
 		{		
 			mSettings = toPersist;
-			LogSdk.d(Utils.getOoVooTag(), "Persisting user settings: " + toPersist);
+			Log.d(Utils.getOoVooTag(), "Persisting user settings: " + toPersist);
 			SharedPreferences sharedPref = mContext.getSharedPreferences(mContext.getResources().getString(R.string.ooVooUserSettings), Context.MODE_PRIVATE);
 			SharedPreferences.Editor prefEditor = sharedPref.edit();
 			prefEditor.putString(mContext.getResources().getString(R.string.base_url_settings_field), toPersist.BaseURL);
@@ -108,7 +123,7 @@ public class UserSettingsManager
 			prefEditor.putInt(mContext.getResources().getString(R.string.microphone_type_settings_field), toPersist.MicrophoneType);
 			prefEditor.putInt(mContext.getResources().getString(R.string.speakers_type_settings_field), toPersist.SpeakersType);
 			//prefEditor.putString(mContext.getResources().getString(R.string.resolution), toPersist.Resolution.toString());
-			
+			prefEditor.putString(mContext.getResources().getString(R.string.log_level), toPersist.CurrentLogLevel.toString());
 			prefEditor.commit();	        	        
 		}
 	}

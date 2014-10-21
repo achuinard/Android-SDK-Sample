@@ -7,11 +7,9 @@
 //
 package com.ooVoo.oovoosample;
 
-import android.view.SurfaceView;
 import android.view.View;
 
 public interface SessionUIPresenter{
-	public SurfaceView getPreviewSurface();
 
 	public void updateParticipantSurface(int participantViewId,
 			String displayName, boolean isVideoOn);

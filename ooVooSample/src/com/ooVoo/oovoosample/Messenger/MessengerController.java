@@ -1,8 +1,8 @@
 package com.ooVoo.oovoosample.Messenger;
 
-import java.util.ArrayList;
-
 import com.oovoo.core.ConferenceCore;
+
+import java.util.ArrayList;
 
 public class MessengerController {
 
@@ -41,6 +41,9 @@ public class MessengerController {
 	public void receiveText(byte[] buffer, String participantName) {
 		if (mListener != null) {
 			mListener.onTextReceived(buffer, participantName);
+		}
+		else{
+			mMessages.add(new Message(new String(buffer), participantName, false));
 		}
 	}
 	

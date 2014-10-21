@@ -7,8 +7,6 @@
 //
 package com.ooVoo.oovoosample.Common;
 
-import java.util.List;
-
 import android.app.AlertDialog;
 import android.content.Context;
 import android.view.Gravity;
@@ -18,6 +16,8 @@ import android.widget.TextView;
 
 import com.ooVoo.oovoosample.R;
 import com.oovoo.core.Utils.MethodUtils;
+
+import java.util.List;
 
 public class Utils {	
 		

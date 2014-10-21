@@ -11,6 +11,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.View;
 
 import com.ooVoo.oovoosample.Common.ParticipantHolder;
@@ -83,7 +84,7 @@ public class VCParticipantsController extends DynamicAbsoluteLayout{
 			mContext = context;
 			mAdapter = ((VideoCallActivity) mContext).getParticipantHolder();
 		} catch (Exception ex) {
-			LogSdk.e(TAG, "initView", ex);
+			Log.e(TAG, "initView", ex);
 		}
 	}
 
@@ -101,7 +102,7 @@ public class VCParticipantsController extends DynamicAbsoluteLayout{
 				onResize();
 			}
 		} catch (Exception ex) {
-			LogSdk.e(TAG, "", ex);
+			Log.e(TAG, "", ex);
 		}
 	}
 
@@ -116,7 +117,7 @@ public class VCParticipantsController extends DynamicAbsoluteLayout{
 				}
 			}
 		} catch (Exception ex) {
-			LogSdk.e(TAG, "", ex);
+			Log.e(TAG, "", ex);
 		}
 		return countActiveSurfaces;
 	}
@@ -144,7 +145,7 @@ public class VCParticipantsController extends DynamicAbsoluteLayout{
 				int videoHeight = viewHeight/2;
 				int videoWidth = mWidth/2;
 				
-				LogSdk.i(Utils.getOoVooTag(), "SIZE :: " + videoWidth +" x " + videoHeight);
+				Log.i(Utils.getOoVooTag(), "SIZE :: " + videoWidth +" x " + videoHeight);
 				int xPos = 0;
 				int yPos = 0;
 				int pos = 0;
@@ -162,7 +163,7 @@ public class VCParticipantsController extends DynamicAbsoluteLayout{
 			}
 			
 		} catch (Exception ex) {
-			LogSdk.e(TAG, "", ex);
+			Log.e(TAG, "", ex);
 		}
 	}
 

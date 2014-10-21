@@ -11,7 +11,7 @@ import android.app.ActionBar;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
-import com.oovoo.core.Utils.LogSdk;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -23,14 +23,15 @@ import android.widget.ListView;
 import android.widget.Switch;
 import android.widget.TextView;
 
-import com.ooVoo.oovoosample.ConferenceManager;
-import com.ooVoo.oovoosample.ConferenceManager.SessionParticipantsListener;
-import com.ooVoo.oovoosample.R;
 import com.ooVoo.oovoosample.Common.Participant;
 import com.ooVoo.oovoosample.Common.ParticipantsManager;
 import com.ooVoo.oovoosample.Common.Utils;
+import com.ooVoo.oovoosample.ConferenceManager;
+import com.ooVoo.oovoosample.ConferenceManager.SessionParticipantsListener;
+import com.ooVoo.oovoosample.R;
 import com.oovoo.core.ConferenceCore.FrameSize;
 import com.oovoo.core.IConferenceCore.ConferenceCoreError;
+import com.oovoo.core.Utils.LogSdk;
 
 // Information presenter entity
 public class InformationActivity extends Activity implements SessionParticipantsListener
@@ -161,12 +162,12 @@ public class InformationActivity extends Activity implements SessionParticipants
 	}
 	
 	private void switchParticipantVideoOn(Participant participant){
-		LogSdk.d(Utils.getOoVooTag(), "turning video on for " + participant.getDisplayName());
+		Log.d(Utils.getOoVooTag(), "turning video on for " + participant.getDisplayName());
 		mConferenceManager.turnParticipantVideoOn(participant.getId());		
 	}
 
 	private void switchParticipantVideoOff(Participant participant){
-		LogSdk.d(Utils.getOoVooTag(), "turning video off for " + participant.getId());
+		Log.d(Utils.getOoVooTag(), "turning video off for " + participant.getId());
 		mConferenceManager.turnParticipantVideoOff(participant.getId(), participant.getDisplayName());		
 	}
 	

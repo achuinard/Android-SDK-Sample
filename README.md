@@ -1,4 +1,4 @@
-## Android-SDK-Sample for SDK v1.2
+## Android-SDK-Sample for SDK v1.3
 
 =================
 

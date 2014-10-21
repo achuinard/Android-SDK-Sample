@@ -13,21 +13,17 @@ import java.util.Map;
 
 import android.opengl.GLSurfaceView;
 import android.text.TextUtils;
+import android.util.Log;
 import android.util.SparseArray;
 
 import com.ooVoo.oovoosample.R;
 import com.ooVoo.oovoosample.SessionUIPresenter;
 import com.oovoo.core.ConferenceCore;
 import com.oovoo.core.ClientCore.VideoChannelPtr;
-import com.oovoo.core.Utils.LogSdk;
 import com.oovoo.core.ui.PreviewVideoRenderer;
 import com.oovoo.core.ui.VideoRenderer;
 
 public class ParticipantHolder {
-	
-	public static final short VIDEO_ON 				= 0;
-	public static final short VIDEO_MUTED_BY_USER 	= 1;
-	public static final short VIDEO_PAUSED_DUE_QOS 	= 2;
 	
 	public class RenderViewData {
 		private int _view_id;
@@ -48,16 +44,17 @@ public class ParticipantHolder {
 		public Boolean isVideoOn() {
 			return _video_on;
 		}
-
-		public void setVideoStateOn(Boolean on, short state) {
+		
+		public void setVideoOn(Boolean on) {
 			_video_on = on;
+		}
+		
+		public Boolean isFullMode() {
+			return isFullMode;
 		}
 		
 		public Boolean isPreview() {
 			return _isPreview;
-		}
-		
-		public void updateVideoState(short state){
 		}
 	}
 
@@ -125,16 +122,15 @@ public class ParticipantHolder {
 		return rc;
 	}
 	
-
 	public Collection<VideoParticipant> getParticipants() {
 		return _users.values();
 	}
-
-	public void setVideoStateOn(String participant, Boolean on, short state) {
-		Integer view_id = _users.get(participant).getViewId();
+	
+	public void setVideoOn(String participant, Boolean on) {
+		Integer view_id = _users.get(participant) != null ? _users.get(participant).getViewId() : null;
 		if (view_id != null && view_id != -1) {
-			_renders.get(view_id).setVideoStateOn(on, state);
-			LogSdk.d(TAG, "Set video state to " + state + " for participant " + participant);
+			_renders.get(view_id).setVideoOn(on);
+			Log.d(TAG, "Set video to " + on);
 		}
 	}
 
@@ -145,10 +141,23 @@ public class ParticipantHolder {
 		return false;
 	}
 
+	public Boolean isFullMode(String participant) {
+		VideoParticipant vp = _users.get(participant);
+		if( vp == null) {
+			Log.w(TAG, "Participant " + participant + " not found!");
+			return false;
+		}
+		Integer view_id = vp.getViewId();
+		if (view_id != null && view_id != -1) {
+			return _renders.get(view_id).isFullMode();
+		}
+		return false;
+	}
+	
 	public Boolean isVideoOn(String participant) {
 		VideoParticipant vp = _users.get(participant);
 		if( vp == null) {
-			LogSdk.w(TAG, "Participant " + participant + " not found!");
+			Log.w(TAG, "Participant " + participant + " not found!");
 			return false;
 		}
 		Integer view_id = vp.getViewId();
@@ -158,14 +167,24 @@ public class ParticipantHolder {
 		return false;
 	}
 
-	public void addGLView(int view_id) {
+	public RenderViewData addGLView(int view_id) {
 		boolean isPreview = (view_id == R.id.myVideoSurface || view_id == R.id.preview_layout_id ? true : false);
 		_renders.put(view_id, new RenderViewData(view_id, isPreview));
-		LogSdk.d(TAG, "adding GLview " + view_id + " total = " + _renders.size());
+		Log.d(TAG, "adding GLview " + view_id + " total = " + _renders.size());
 		
 		if (isPreview) {
 			_users.put("", new VideoParticipant("", "Me", view_id));
 		}
+		
+		return _renders.get(view_id);
+	}
+	
+	public void updateGLPreview(int view_id, RenderViewData renderViewData) {
+
+		_renders.put(view_id, renderViewData);
+		Log.d(TAG, "updating GLview " + view_id + " total = " + _renders.size());
+		
+		_users.put("", new VideoParticipant("", "Me", view_id));
 	}
 
 	public String findRenderIdByViewId(int view_id) {
@@ -184,19 +203,21 @@ public class ParticipantHolder {
 //		_on_pause = false;
 		for (int i = 0; i < _renders.size(); i++) {
 			RenderViewData d = _renders.valueAt(i);
-			LogSdk.d(TAG, "updating GLview " + d._view_id + " for user " + d._user);
+			Log.d(TAG, "updating GLview " + d._view_id + " for user " + d._user);
 
 			GLSurfaceView glview = (GLSurfaceView) presenter.findViewById(d._view_id);
 			if (glview == null) {
-				LogSdk.e(TAG, "NULL GL view!!! " + d._view_id);
+				Log.e(TAG, "NULL GL view!!! " + d._view_id);
 				continue;
 			}
+		
 			try {
 				glview.setEGLContextClientVersion(2);
 				if( d.isPreview())
 					d._render = new PreviewVideoRenderer(glview);
 				else
 					d._render = new VideoRenderer(glview);
+
 				glview.setRenderer(d._render);
 				glview.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);// .RENDERMODE_CONTINUOUSLY);
 			} catch (IllegalStateException e) {
@@ -222,10 +243,10 @@ public class ParticipantHolder {
 			RenderViewData d = _renders.valueAt(i);
 			if (d._view_id != viewIdForFullMode) {
 				String user = getParticipantByViewId(d._view_id);
-				LogSdk.d(TAG, "pausing GLview " + d._view_id + " for user " + user);
+				Log.d(TAG, "pausing GLview " + d._view_id + " for user " + user);
 //				if (d._video_on) {					
 //					ConferenceCore.instance().receiveParticipantVideoOff(user);
-//					LogSdk.d(TAG, "send turn video Off for user " + user);
+//					Log.d(TAG, "send turn video Off for user " + user);
 //				}
 				d.isFullMode = false;
 			} else {
@@ -245,7 +266,7 @@ public class ParticipantHolder {
 				if (d._video_on && d._user != null) {
 					numActiveRenders++;
 //					ConferenceCore.instance().receiveParticipantVideoOn(d._user);
-//					LogSdk.d(TAG, "resume GLview " + d._view_id + " for user "
+//					Log.d(TAG, "resume GLview " + d._view_id + " for user "
 //							+ d._user);
 				}
 			}
@@ -254,7 +275,7 @@ public class ParticipantHolder {
 			}
 		}
 		
-		if(numActiveRenders < ParticipantsManager.MAX_ACTIVE_PARTICIPANTS_IN_CALL && _users.size() > numActiveRenders){
+		if(numActiveRenders < ParticipantsManager.MAX_ACTIVE_PARTICIPANTS_IN_CALL && _users.size() >= numActiveRenders){
 			fillEmptyRenders();
 		}
 	}
@@ -262,34 +283,38 @@ public class ParticipantHolder {
 	private void fillEmptyRenders(){
 		for (Map.Entry<String, VideoParticipant> e : _users.entrySet()) {
 			VideoParticipant participant = e.getValue();
+			RenderViewData d = getFreeRender();
 			if (participant.getViewId() == -1) {				
-				RenderViewData d = getFreeRender();
-				if (d != null){
+				
+				if (d != null) {
 					participant.setViewId(d._view_id);
-					LogSdk.i(Utils.getOoVooTag(), "Add free render for " + participant._participantId + " as " + d._view_id);					
+					Log.i(Utils.getOoVooTag(), "Add free render for " + participant._participantId + " as " + d._view_id);					
 					d._video_on = true;
 					d._user = participant.getParticipantId();
-					ConferenceCore.instance().receiveParticipantVideoOn(participant.getParticipantId());					
+								
 				} else {
 					break;
 				}
+			}
+			
+			if (d != null && d._video_on) {
+				ConferenceCore.instance().receiveParticipantVideoOn(participant.getParticipantId());
 			}
 		}	
 	}
 
 	public void Pause() {
-		LogSdk.d(TAG, "Pause: on_pause=" + _on_pause);
+		Log.d(TAG, "Pause: on_pause=" + _on_pause);
 		_on_pause = true;
 		
 		for (int i = 0; i < _renders.size(); i++) {
 			RenderViewData d = _renders.valueAt(i);
 			String user = getParticipantByViewId(d._view_id);
 
-			LogSdk.d(TAG, "pausing GLview " + d._view_id + " for user " + user);
+			Log.d(TAG, "pausing GLview " + d._view_id + " for user " + user);
 			if (d._video_on) {
 				ConferenceCore.instance().receiveParticipantVideoOff(user);
-				LogSdk.d(TAG, "send turn video Off for user " + user);
-				d.updateVideoState(VIDEO_PAUSED_DUE_QOS);
+				Log.d(TAG, "send turn video Off for user " + user);
 				
 				// d._render.channel().Disconnect();
 				// d._render = null;
@@ -300,36 +325,36 @@ public class ParticipantHolder {
 
 	public void addParticipant(String sParticipantId, String sOpaqueString) {
 		if (_users.containsKey(sParticipantId)) {
-			LogSdk.w(TAG, "add Participant failed! Participant " + sParticipantId + " already exist");
+			Log.w(TAG, "add Participant failed! Participant " + sParticipantId + " already exist");
 		}
 		_users.put(sParticipantId, new VideoParticipant(sParticipantId, sOpaqueString, -1));			
 	}
 	
 	public int prepareParticipantAsActiveRender(String sParticipantId){
 		int numActiveRenders = getActiveRenders();
-		LogSdk.i(Utils.getOoVooTag(), "Active renders = " + numActiveRenders);	
-		if((!_on_full_mode && numActiveRenders < ParticipantsManager.MAX_ACTIVE_PARTICIPANTS_IN_CALL)){
-			LogSdk.i(Utils.getOoVooTag(), "Add joined user to active renders " + sParticipantId);			
+		Log.i(Utils.getOoVooTag(), "Active renders = " + numActiveRenders);	
+		if((/*!_on_full_mode &&*/ numActiveRenders < ParticipantsManager.MAX_ACTIVE_PARTICIPANTS_IN_CALL)){
+			Log.i(Utils.getOoVooTag(), "Add joined user to active renders " + sParticipantId);			
 			RenderViewData d = getFreeRender();
 			if (d != null){
 				_users.get(sParticipantId).setViewId(d._view_id);
-				LogSdk.i(Utils.getOoVooTag(), "Add free render for " + sParticipantId + " as " + d._view_id);					
+				Log.i(Utils.getOoVooTag(), "Add free render for " + sParticipantId + " as " + d._view_id);					
 				d._video_on = false;
 				d._user = sParticipantId;
 				return d._view_id;
 			} else {
-				LogSdk.i(Utils.getOoVooTag(), "No available GLView found for Participant " + sParticipantId);
+				Log.i(Utils.getOoVooTag(), "No available GLView found for Participant " + sParticipantId);
 			}
 		}
 		else{
-			LogSdk.i(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - can't add user to active surfaces");			
+			Log.i(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - can't add user to active surfaces");			
 		}
 		return -1;
 	}
 
 	private RenderViewData getFreeRender() {
 		RenderViewData rd = null;
-		LogSdk.i(Utils.getOoVooTag(), "RENDERS Size = " + _renders.size());
+		Log.i(Utils.getOoVooTag(), "RENDERS Size = " + _renders.size());
 		for (int i = 0; i < _renders.size(); i++) {
 			RenderViewData d = _renders.valueAt(i);
 //			if (!d._video_on && d._user == null) {
@@ -344,35 +369,38 @@ public class ParticipantHolder {
 	public boolean removeParticipant(String sParticipantId) {
 		boolean updateFullMode = false;
 		if (!_users.containsKey(sParticipantId)) {
-			LogSdk.e(TAG, "remove Participant failed! Participant "
+			Log.e(TAG, "remove Participant failed! Participant "
 					+ sParticipantId + " not found");
 			return updateFullMode;
 		}
 		Integer view_id = _users.get(sParticipantId).getViewId();
 		if (view_id == -1) {
-			LogSdk.d(TAG, "Participant " + sParticipantId
+			Log.d(TAG, "Participant " + sParticipantId
 					+ " is not connected to any GLView");
 		} else {
 			RenderViewData d = _renders.get(view_id);
-			updateFullMode = d.isFullMode;
-			d.isFullMode = false;
-			d._render.disconnect();
-			d._video_on = false;
-			d._user = null;
+			if( d != null) {
+				updateFullMode = d.isFullMode;
+				d.isFullMode = false;
+				if( d._render != null)
+					d._render.disconnect();
+				d._video_on = false;
+				d._user = null;
+			}
 		}
 		_users.remove(sParticipantId);
 
 		if (updateFullMode) 
 			moveToMultiMode(-1);
 
-		LogSdk.d(TAG, "remove Participant " + sParticipantId + " GLView "
+		Log.d(TAG, "remove Participant " + sParticipantId + " GLView "
 				+ view_id + " is free.");
 		return updateFullMode;
 	}
 
 	public boolean turnVideoOn(String sParticipantId, VideoChannelPtr in) {
 		if (!_users.containsKey(sParticipantId)) {
-			LogSdk.e(TAG, "turnVideoOn: Participant " + sParticipantId
+			Log.e(TAG, "turnVideoOn: Participant " + sParticipantId
 					+ " not found");
 			return false;
 		}
@@ -380,7 +408,7 @@ public class ParticipantHolder {
 		RenderViewData d = null;
 		Integer view_id = _users.get(sParticipantId).getViewId();
 		if (view_id == -1) {
-			LogSdk.d(TAG, "Participant " + sParticipantId
+			Log.d(TAG, "Participant " + sParticipantId
 					+ " is not connected to any GLView");
 			d = getFreeRender();
 			if (d != null)
@@ -394,11 +422,11 @@ public class ParticipantHolder {
 			d._render.connect(in, sParticipantId);
 			d._video_on = true;
 			d._user = sParticipantId;
-			LogSdk.d(TAG, "video is ON for " + sParticipantId + " GLView "
+			Log.d(TAG, "video is ON for " + sParticipantId + " GLView "
 					+ d._view_id);
 			return true;
 		} else {
-			LogSdk.w(TAG, "No available GLView found for Participant "
+			Log.w(TAG, "No available GLView found for Participant "
 					+ sParticipantId);
 		}
 		return false;
@@ -406,13 +434,13 @@ public class ParticipantHolder {
 
 	public void turnVideoOff(String sParticipantId) {
 		if (!_users.containsKey(sParticipantId)) {
-			LogSdk.e(TAG, "Participant " + sParticipantId + " not found");
+			Log.e(TAG, "Participant " + sParticipantId + " not found");
 			return;
 		}
 
 		Integer view_id = _users.get(sParticipantId).getViewId();
 		if (view_id == -1) {
-			LogSdk.w(TAG, "No GLview found for participant " + sParticipantId);
+			Log.w(TAG, "No GLview found for participant " + sParticipantId);
 			return;
 		}
 
@@ -422,23 +450,24 @@ public class ParticipantHolder {
 				d._render.disconnect();
 			if (!_on_pause && !_on_full_mode) {
 				d._video_on = false;
-				d._user = null;
+				//should not disconnect user from render when only video is off, render should re-served for user as long as the user is in the session
+				//d._user = null;
 			}
-			LogSdk.d(TAG, "video is OFF for " + sParticipantId);
+			Log.d(TAG, "video is OFF for " + sParticipantId);
 		} else
-			LogSdk.w(TAG, "turnVideoOff: No GVView found for Participant "
+			Log.w(TAG, "turnVideoOff: No GVView found for Participant "
 					+ sParticipantId);
 	}
 
 	public void Resume() {
-		LogSdk.d(TAG, "Resume: on_pause=" + _on_pause);
+		Log.d(TAG, "Resume: on_pause=" + _on_pause);
 		_on_pause = false;
 		
 		for (int i = 0; i < _renders.size(); i++) {
 			RenderViewData d = _renders.valueAt(i);
 			if ((d._video_on && d._user != null) && (!_on_full_mode || (_on_full_mode && d.isFullMode))) {
 				ConferenceCore.instance().receiveParticipantVideoOn(d._user);
-				LogSdk.d(TAG, "resume GLview " + d._view_id + " for user " + d._user);
+				Log.d(TAG, "resume GLview " + d._view_id + " for user " + d._user);
 			}
 		}
 	}

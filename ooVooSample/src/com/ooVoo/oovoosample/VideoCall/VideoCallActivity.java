@@ -17,6 +17,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.hardware.Camera;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -32,6 +33,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.ooVoo.oovoosample.ConferenceManager;
+import com.ooVoo.oovoosample.ConferenceManager.ParticipantSwitchListener;
 import com.ooVoo.oovoosample.ConferenceManager.SessionControlsListener;
 import com.ooVoo.oovoosample.ConferenceManager.SessionListener;
 import com.ooVoo.oovoosample.ConferenceManager.SessionParticipantsListener;
@@ -50,16 +52,16 @@ import com.ooVoo.oovoosample.Information.InformationActivity;
 import com.ooVoo.oovoosample.Messenger.MessengerActivity;
 import com.ooVoo.oovoosample.Messenger.MessengerController;
 import com.ooVoo.oovoosample.Settings.UserSettings;
+import com.oovoo.core.ConferenceCore;
 import com.oovoo.core.ConferenceCore.FrameSize;
 import com.oovoo.core.IConferenceCore.CameraResolutionLevel;
 import com.oovoo.core.IConferenceCore.ConferenceCoreError;
-import com.oovoo.core.Utils.LogSdk;
 import com.oovoo.core.device.deviceconfig.VideoFilterData;
 
 // Video presenter entity
 public class VideoCallActivity extends Activity implements OnClickListener,
 		SessionControlsListener, SessionListener, SessionParticipantsListener,
-		SessionUIPresenter, View.OnTouchListener {
+		SessionUIPresenter, View.OnTouchListener, ParticipantSwitchListener {
 	
 	private Boolean _initialized = false;
 	private ConferenceManager mConferenceManager = null;
@@ -69,13 +71,17 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	private VCParticipantsController mVCParticipantsController = null;
 	private Spinner mFilterSpinner; 
 	private Button mBubbleButton;
+	private String mActiveFilterId;
+	private boolean isCameraMuted = false;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 		mConferenceManager = ConferenceManager.getInstance(getApplicationContext());
-		LogSdk.d(Utils.getOoVooTag(), "savedInstanceState is null: " + (savedInstanceState == null));
+		Log.d(Utils.getOoVooTag(), "savedInstanceState is null: " + (savedInstanceState == null));
+		mActiveFilterId = mConferenceManager.getActiveFilter();
+		mConferenceManager.setParticipantSwitchListener(this);
 		initView();
 	}
 
@@ -83,27 +89,27 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 		// Set layout
 		setContentView(R.layout.video_call);
 		
-		LogSdk.d(Utils.getOoVooTag(), "setting cameraButton");
+		Log.d(Utils.getOoVooTag(), "setting cameraButton");
 		Button cameraButton = (Button) findViewById(R.id.cameraButton);
 		cameraButton.setOnClickListener(this);
 
-		LogSdk.d(Utils.getOoVooTag(), "setting microphoneButton");
+		Log.d(Utils.getOoVooTag(), "setting microphoneButton");
 		Button microphoneButton = (Button) findViewById(R.id.microphoneButton);
 		microphoneButton.setOnClickListener(this);
 
-		LogSdk.d(Utils.getOoVooTag(), "setting speakersButton");
+		Log.d(Utils.getOoVooTag(), "setting speakersButton");
 		Button speakersButton = (Button) findViewById(R.id.speakersButton);
 		speakersButton.setOnClickListener(this);
 
-		LogSdk.d(Utils.getOoVooTag(), "setting endOfCallButton");
+		Log.d(Utils.getOoVooTag(), "setting endOfCallButton");
 		Button endOfCallButton = (Button) findViewById(R.id.endOfCallButton);
 		endOfCallButton.setOnClickListener(this);
 		
-		LogSdk.d(Utils.getOoVooTag(), "setting bubbleButton");
+		Log.d(Utils.getOoVooTag(), "setting bubbleButton");
 		mBubbleButton = (Button) findViewById(R.id.bubbleButton);
 		mBubbleButton.setOnClickListener(this);
 
-		LogSdk.d(Utils.getOoVooTag(), "setting resolutionSpinner");
+		Log.d(Utils.getOoVooTag(), "setting resolutionSpinner");
 		mResSpinner = (Spinner) findViewById(R.id.resolutionSpinner);
 		ArrayList<ResolutionWrapper> values = new ArrayList<ResolutionWrapper>();
 		
@@ -132,7 +138,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 			}
 		});
 
-		LogSdk.d(Utils.getOoVooTag(), "setting ParticipantVideoSurfaces");
+		Log.d(Utils.getOoVooTag(), "setting ParticipantVideoSurfaces");
 		mVCParticipantsController = (VCParticipantsController)findViewById(R.id.participants_controller);
 		
 		mParticipantsVideoSurfaces = new ParticipantVideoSurface[4];
@@ -173,7 +179,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 			ab.setIcon(R.drawable.ic_main);
 		}
 		
-		LogSdk.d(Utils.getOoVooTag(), "setting filterSpinner");
+		Log.d(Utils.getOoVooTag(), "setting filterSpinner");
 		mFilterSpinner = (Spinner) findViewById(R.id.filterSpinner);
 		ArrayList<VideoFilterDataWrapper> f_values = new ArrayList<VideoFilterDataWrapper>();
 		VideoFilterData[] arr = mConferenceManager.getAvailableFilters();
@@ -183,7 +189,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 			if( d.id().equals(Camera.Parameters.EFFECT_NONE)) {
 				none = w;
 			}
-				
+
 			f_values.add(w);
 		}		
 		Utils.setSpinnerValues(this, mFilterSpinner, f_values);
@@ -198,7 +204,8 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 						.getSelectedSpinnerValue(mFilterSpinner);
 //				UserSettings settings = mConferenceManager.retrieveSettings();
 //				settings.Resolution = selectedRes.Level;
-				mConferenceManager.setActiveFilter(selectedRes.id());
+				mActiveFilterId = selectedRes.id();
+				mConferenceManager.setActiveFilter(mActiveFilterId);
 //				mConferenceManager.persistSettings(settings);
 			}
 
@@ -230,7 +237,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	    inflater.inflate(R.menu.vc_menu, menu);
 	    return true;
 	}
-	
+
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		if (item == null)
@@ -253,7 +260,6 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 
 	// Start a new activity using the requested effects
 	private void startActivity(Class<?> activityToStart) {
-		mConferenceManager.setCameraMuted(true);
 		
 		// Maybe should use this flag just for Video Call activity?
 		Intent myIntent = new Intent(this, activityToStart);
@@ -304,7 +310,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 
 	@Override
 	protected void onDestroy() {
-		LogSdk.d(Utils.getOoVooTag(), "VideoCallActivity onDestroy");
+		Log.d(Utils.getOoVooTag(), "VideoCallActivity onDestroy");
 		super.onDestroy();
 	}
 
@@ -312,10 +318,17 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 		startActivity(AlertsActivity.class);
 	}
 
+	public void onCameraOn() {
+		Log.d(Utils.getOoVooTag(), "OnCameraOn");
+		mConferenceManager.setCameraMuted(isCameraMuted);
+	}
+	
+	
 	// Called from model upon camera mute change
 	@Override
 	public void onSetCameraMuted(final boolean isMuted) {
-		LogSdk.d(Utils.getOoVooTag(), "onSetCameraMuted to " + isMuted);
+		Log.d(Utils.getOoVooTag(), "onSetCameraMuted to " + isMuted);
+		
 		// Just GUI. SDK calls are in model
 		runOnUiThread(new Runnable() {
 			@Override
@@ -327,13 +340,33 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	}
 
 	private void fireCameraMuted(boolean isMuted) {
+		
+		if (!isMuted) {
+			mConferenceManager.setActiveFilter(mActiveFilterId);
+		}
+
 		final Button btn = (Button) (findViewById(R.id.cameraButton));
-		final SurfaceView surface = ((SurfaceView) findViewById(R.id.myVideoSurface));
+		final SurfaceView myVideoSurface = ((SurfaceView) findViewById(R.id.myVideoSurface));
 		
 		int new_v = isMuted ? SurfaceView.INVISIBLE : SurfaceView.VISIBLE;
 		btn.setSelected(isMuted ? true : false);
-		surface.setVisibility(new_v);
-		LogSdk.d(Utils.getOoVooTag(), "set visibility to " + isMuted + " new: " + new_v);
+		myVideoSurface.setVisibility(new_v);
+		ParticipantVideoSurface surface = _surfaces.get(myVideoSurface.getId());
+		if (surface != null) {
+			States state = isMuted ? States.STATE_AVATAR : States.STATE_VIDEO;
+			surface.setState(state);
+			
+			ParticipantsManager participantsManager = mConferenceManager.getParticipantsManager();
+			if (participantsManager.getHolder().isFullMode() && 
+					!participantsManager.getHolder().isFullMode(ConferenceManager.LOCAL_PARTICIPANT_ID_DEFAULT)) {
+				surface.hideSurface();
+				surface.setVisibility(View.INVISIBLE);
+			}
+			
+			participantsManager.getHolder().setVideoOn(ConferenceManager.LOCAL_PARTICIPANT_ID_DEFAULT, isCameraMuted ? false : true);
+		}
+
+		Log.d(Utils.getOoVooTag(), "set visibility to " + isMuted + " new: " + new_v);
 	}
 
 	// Called from model upon microphone mute change
@@ -416,6 +449,8 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	@Override
 	protected void onPause() {
 		super.onPause();
+		isCameraMuted = mConferenceManager.isCameraMuted();
+		mConferenceManager.setCameraMuted(true);
 		mConferenceManager.pauseSession();
 		mConferenceManager.removeSessionControlsListener(this);
 	}
@@ -426,26 +461,17 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 		UserSettings settings = mConferenceManager.retrieveSettings();
 
 		CameraResolutionLevel level = settings.Resolution; //mConferenceManager.getCameraResolutionLevel();
-		LogSdk.d(Utils.getOoVooTag(), "Camera resolution is: " + level);
+		Log.d(Utils.getOoVooTag(), "Camera resolution is: " + level);
 		Utils.setSelectedSpinnerValue(mResSpinner, new ResolutionWrapper( level, "Doesnt Matter"));
 		
 		mConferenceManager.addSessionControlsListener(this);
-		boolean cameraWasOn = false;
 		
 		if (!_initialized) {
 			_initialized = true;
-			cameraWasOn = true;
 			initSession(mParticipantsVideoSurfaces);
 		}
-		mConferenceManager.resumeSession();
 		
-		Participant myId = mConferenceManager.getParticipantsManager().getParticipant( "");
-		if( myId != null) {
-			if( !cameraWasOn)
-				cameraWasOn = myId.getIsVideoOn();
-			LogSdk.d(Utils.getOoVooTag(), "onResume: my video was " + cameraWasOn);
-			mConferenceManager.setCameraMuted(!cameraWasOn);
-		}
+		mConferenceManager.resumeSession();
 		
 		ParticipantsManager mParticipantsManager = mConferenceManager.getParticipantsManager();
 		if( mParticipantsManager.getNoOfVideosOn() > 0) {
@@ -461,6 +487,9 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 				}
 			}
 		}
+		
+		fireMicrophoneMuted( mConferenceManager.isMicMuted());
+		fireSpeakersMuted( mConferenceManager.isSpeakerMuted());
 	}
 
 	public synchronized void initSession(ParticipantVideoSurface[] mParticipantsVideoSurfaces) {
@@ -472,7 +501,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 
 			ParticipantsManager mParticipantsManager = mConferenceManager.getParticipantsManager();
 			_surfaces.clear();
-			LogSdk.i(Utils.getOoVooTag(), "VideoCallActivity :: initSession -> mParticipantsVideoSurfaces length = " + mParticipantsVideoSurfaces.length );
+			Log.i(Utils.getOoVooTag(), "VideoCallActivity :: initSession -> mParticipantsVideoSurfaces length = " + mParticipantsVideoSurfaces.length );
 			for (int i = 0; i < mParticipantsVideoSurfaces.length; i++) {
 				mParticipantsManager.getHolder().addGLView(mParticipantsVideoSurfaces[i].mVideoView.getId());
 				_surfaces.put(mParticipantsVideoSurfaces[i].mVideoView.getId(), mParticipantsVideoSurfaces[i]);
@@ -480,7 +509,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 			mConferenceManager.initSession(mParticipantsVideoSurfaces);
 			mConferenceManager.setUIReadyState(true);
 		} catch (Exception e) {
-			LogSdk.e(Utils.getOoVooTag(), "", e);
+			Log.e(Utils.getOoVooTag(), "", e);
 		}
 	}
 
@@ -489,7 +518,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
-				LogSdk.i(Utils.getOoVooTag(), "VideoCallActivity :: " + sParticipantId +" joined to conference;  {participantViewId = " + participantViewId +" }");
+				Log.i(Utils.getOoVooTag(), "VideoCallActivity :: " + sParticipantId +" joined to conference;  {participantViewId = " + participantViewId +" }");
 				if (participantViewId != -1 && _surfaces != null) {
 					ParticipantVideoSurface surface = _surfaces.get(participantViewId);
 					if (surface != null) {
@@ -497,7 +526,15 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 						surface.showAvatar();
 						surface.setName(sOpaqueString);
 						surface.setState(States.STATE_AVATAR);
+						
+						if (mConferenceManager.getParticipantsManager().getHolder().isFullMode()) {
+							surface.hideSurface();
+							surface.setVisibility(View.INVISIBLE);
+							surface.setState(States.STATE_VIDEO);
+							ConferenceCore.instance().receiveParticipantVideoOn(sParticipantId);
+						}
 					}
+
 					mVCParticipantsController.onResize();
 				}
 			}
@@ -529,7 +566,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
-				LogSdk.d(Utils.getOoVooTag(), "onSessionLeft (JAVA MF)");
+				Log.d(Utils.getOoVooTag(), "onSessionLeft (JAVA MF)");
 				// // Just GUI. SDK calls are in model
 //				startActivity(MainActivity.class);
 				// Kill the activity so it will not remain in the stack
@@ -550,13 +587,6 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	}
 
 	@Override
-	public SurfaceView getPreviewSurface() {
-		//return (SurfaceView) findViewById(R.id.myVideoSurface);
-		return (SurfaceView) findViewById(R.id.userSmallUnusedPreview);
-		
-	}
-
-	@Override
 	public void initSurfaces() {
 		runOnUiThread(new Runnable() {
 			@Override
@@ -573,16 +603,25 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
-				ParticipantsManager mParticipantsManager = mConferenceManager.getParticipantsManager();
-				if (!mParticipantsManager.getHolder().isFullMode()) {
-					ParticipantVideoSurface surface = _surfaces.get(participantViewId);
-					if (surface != null) {
+				ParticipantsManager participantsManager = mConferenceManager.getParticipantsManager();
+				ParticipantVideoSurface surface = _surfaces.get(participantViewId);
+				
+				if (surface != null) {
+					surface.setName(displayName);
+					surface.showAvatar();
+					surface.setState(States.STATE_AVATAR);
+					
+					if (participantsManager.getHolder().isFullMode() && 
+							participantsManager.getHolder().getViewIdForFullMode() != participantViewId) {
+						surface.hideSurface();
+						surface.setVisibility(View.INVISIBLE);
+						surface.setState(isVideoOn ? States.STATE_PAUSED : States.STATE_AVATAR);
+					} else {
 						surface.setVisibility(View.VISIBLE);
-						surface.setName(displayName);
-						surface.showAvatar();
 						if (isVideoOn) {
 							surface.showVideo();
 							surface.hideUserStatusInfo();
+							surface.setState(States.STATE_VIDEO);
 						}
 					}
 				}
@@ -606,7 +645,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 					if (surface != null) {
 						surface.showAvatar();
 						surface.showUserStatusInfo();
-						surface.setState(States.STATE_AVATAR);
+						surface.setState(States.STATE_PAUSED);
 					}
 				}
 			}
@@ -657,6 +696,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 					if (surface != null) {
 						surface.setVisibility(View.INVISIBLE);
 						surface.showEmptyCell();
+						surface.setState(States.STATE_EMPTY);
 					}
 					mVCParticipantsController.onResize();
 				}
@@ -665,7 +705,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	}
 
 	public void onParticipantVideoTurnedOn(ConferenceCoreError eErrorCode,
-			String sParticipantId, FrameSize frameSize,
+			final String sParticipantId, FrameSize frameSize,
 			final int participantViewId, final String displayName) {
 		runOnUiThread(new Runnable() {
 			@Override
@@ -673,11 +713,16 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 				if (participantViewId != -1) {
 					ParticipantVideoSurface surface = _surfaces.get(participantViewId);
 					if (surface != null) {
-						ParticipantsManager mParticipantsManager = mConferenceManager.getParticipantsManager();
-						if (!mParticipantsManager.getHolder().isFullMode() ||
-							 mParticipantsManager.getHolder().getViewIdForFullMode() != R.id.myVideoSurface) {
+						ParticipantsManager participantsManager = mConferenceManager.getParticipantsManager();
+
+						surface.setName(displayName);
+						
+						if (participantsManager.getHolder().isFullMode() && 
+								!participantsManager.getHolder().isFullMode(sParticipantId)) {
+							surface.hideSurface();
+							surface.setVisibility(View.INVISIBLE);
+						} else {
 							surface.showVideo();
-							surface.setName(displayName);							
 						}
 						surface.setState(States.STATE_VIDEO);
 					}
@@ -685,17 +730,22 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 			}
 		});
 	}
-
+	
 	@Override
 	public boolean onTouch(View v, MotionEvent event) {
-		if(v != null){
-			if(v.getVisibility() == View.INVISIBLE)
+		if (v != null) {
+			if (v.getVisibility() == View.INVISIBLE)
 				return false;
 			
 			if (_surfaces != null) {
-				for(ParticipantVideoSurface surfaceHolder : _surfaces.values()){
-					if(surfaceHolder.getId() == v.getId()){
-						mConferenceManager.switchUIFullMode(surfaceHolder.mVideoView.getId());
+				for (ParticipantVideoSurface surfaceHolder : _surfaces.values()) {
+					if (surfaceHolder.getId() == v.getId()) {
+						ParticipantsManager participantsManager = mConferenceManager.getParticipantsManager();
+						String participantId = participantsManager.getHolder().getParticipantByViewId(surfaceHolder.mVideoView.getId());
+						if (participantsManager.getHolder().isFullMode(participantId) || surfaceHolder.getState() != States.STATE_AVATAR) {
+							mConferenceManager.switchUIFullMode(surfaceHolder.mVideoView.getId());
+						}
+						
 						break;
 					}						
 				}
@@ -715,7 +765,7 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 							surfaceHolder.setVisibility(View.VISIBLE);
 						} else {
 							surfaceHolder.hideSurface();
-							surfaceHolder.setVisibility(View.GONE);
+							surfaceHolder.setVisibility(View.INVISIBLE);
 						}	
 						if (surfaceHolder.getVisibility() == View.VISIBLE && 
 							surfaceHolder.mVideoView.getId() == R.id.myVideoSurface) {
@@ -734,9 +784,10 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 			@Override
 			public void run() {
 				if (_surfaces != null) {
+					boolean needResume = false;
 					for(ParticipantVideoSurface surfaceHolder : _surfaces.values()){
 						
-						if(mConferenceManager.isVideoRenderActive(surfaceHolder.mVideoView.getId())) {
+						if (mConferenceManager.isVideoRenderActive(surfaceHolder.mVideoView.getId())) {
 							surfaceHolder.setVisibility(View.VISIBLE);		
 							surfaceHolder.showSurface();
 						} else {
@@ -745,6 +796,20 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 						if (surfaceHolder.getState() == States.STATE_AVATAR) {
 							surfaceHolder.setVisibility(View.VISIBLE);
 							surfaceHolder.update();
+						}
+						else if(surfaceHolder.getState() == States.STATE_PAUSED){
+							needResume = true;
+							surfaceHolder.setVisibility(View.VISIBLE);
+							surfaceHolder.setState(States.STATE_VIDEO);
+							surfaceHolder.update();
+						}
+					}
+					if(needResume)
+					{
+						ParticipantHolder holder = getParticipantHolder();
+						if(holder != null)
+						{
+							holder.Resume();
 						}
 					}
 				}
@@ -756,5 +821,18 @@ public class VideoCallActivity extends Activity implements OnClickListener,
 	
 	public ParticipantHolder getParticipantHolder() {
 		return ((mConferenceManager == null || mConferenceManager.getParticipantsManager() == null)? null : mConferenceManager.getParticipantsManager().getHolder());
+	}
+
+	@Override
+	public void onSessionInited() {
+		mConferenceManager.setCameraMuted(false);
+	}
+
+	@Override
+	public void onParticipantVideoTurned(String participantId, boolean isOn) {
+		
+		if (participantId.isEmpty()) {
+			isCameraMuted = isOn ? false : true;
+		}
 	}
 }

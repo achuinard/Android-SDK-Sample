@@ -11,7 +11,8 @@ import android.app.ActionBar;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
-import com.oovoo.core.Utils.LogSdk;
+
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -20,9 +21,10 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.ooVoo.oovoosample.R;
 import com.ooVoo.oovoosample.Common.AlertsManager;
 import com.ooVoo.oovoosample.Common.IAlertsListener;
+import com.ooVoo.oovoosample.R;
+import com.oovoo.core.Utils.LogSdk;
 
 public class AlertsActivity extends Activity implements IAlertsListener {
 
@@ -38,10 +40,10 @@ public class AlertsActivity extends Activity implements IAlertsListener {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		LogSdk.d(TAG, "onCreate started");	
+		Log.d(TAG, "onCreate started");	
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 		mAlertsAdapter.notifyDataSetChanged();
-		LogSdk.d(TAG, "onCreate done");	
+		Log.d(TAG, "onCreate done");	
 	}
 	
 	private void initView(){
@@ -89,14 +91,14 @@ public class AlertsActivity extends Activity implements IAlertsListener {
 		mAlertsAdapter.notifyDataSetChanged();
 		initView();
 		
-		LogSdk.d(TAG, "onResume - registering to AlertsManager events");
+		Log.d(TAG, "onResume - registering to AlertsManager events");
 		AlertsManager.getInstance().addListener(this);
 	}
 
 	@Override
 	protected void onPause() {
 		super.onPause();
-		LogSdk.d(TAG, "onPause - de-registering to AlertsManager events");
+		Log.d(TAG, "onPause - de-registering to AlertsManager events");
 		mAlertsAdapter.notifyDataSetInvalidated();
 		AlertsManager.getInstance().removeListener(this);
 	}
@@ -106,7 +108,7 @@ public class AlertsActivity extends Activity implements IAlertsListener {
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
-				LogSdk.d(TAG, "OnAlert - recieved alert:"+alert);
+				Log.d(TAG, "OnAlert - recieved alert:"+alert);
 				mAlertsAdapter.notifyDataSetChanged();
 			}
 		});		
@@ -150,7 +152,7 @@ public class AlertsActivity extends Activity implements IAlertsListener {
 				String alert = getItem(index);			
 				viewHolder.textView.setText(alert);
 			} catch( IllegalStateException ex) {
-				LogSdk.e(TAG, "getView", ex);
+				Log.e(TAG, "getView", ex);
 				//ex.printStackTrace();
 			}
 			return view;

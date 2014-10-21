@@ -7,11 +7,6 @@
 //
 package com.ooVoo.oovoosample;
 
-import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Vector;
-
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.media.AudioFormat;
@@ -19,9 +14,13 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.os.Build;
+import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.SurfaceView;
+import android.view.ViewGroup.LayoutParams;
+import android.view.WindowManager;
 
 import com.ooVoo.oovoosample.Common.AlertsManager;
 import com.ooVoo.oovoosample.Common.Participant;
@@ -34,24 +33,31 @@ import com.ooVoo.oovoosample.Settings.MediaDeviceWrapper;
 import com.ooVoo.oovoosample.Settings.UserSettings;
 import com.ooVoo.oovoosample.Settings.UserSettingsManager;
 import com.ooVoo.oovoosample.util.CommandQueued;
+import com.ooVoo.oovoosample.FileLogger;
+import com.oovoo.core.ClientCore.VideoChannelPtr;
 import com.oovoo.core.ConferenceCore;
 import com.oovoo.core.ConferenceCore.FrameSize;
 import com.oovoo.core.ConferenceCore.IMediaDeviceInformation;
 import com.oovoo.core.ConferenceCore.MediaDevice;
+import com.oovoo.core.ConferenceCore.MediaDeviceInfo.DeviceState;
+import com.oovoo.core.Exceptions.DeviceNotSelectedException;
 import com.oovoo.core.IConferenceCore;
 import com.oovoo.core.IConferenceCore.CameraResolutionLevel;
 import com.oovoo.core.IConferenceCore.ConferenceCoreError;
 import com.oovoo.core.IConferenceCore.ConnectionStatistics;
 import com.oovoo.core.IConferenceCore.DeviceType;
-import com.oovoo.core.IConferenceCoreListener;
-import com.oovoo.core.ClientCore.VideoChannelPtr;
-import com.oovoo.core.Exceptions.CoreException;
-import com.oovoo.core.Exceptions.DeviceNotSelectedException;
+import com.oovoo.core.IConferenceCore.LogLevel;
 import com.oovoo.core.Utils.LogSdk;
-import com.oovoo.core.Utils.ManifestData;
+import com.oovoo.core.IConferenceCoreListener;
+import com.oovoo.core.ILoggerListener;
 import com.oovoo.core.device.deviceconfig.VideoFilterData;
 
-public class ConferenceManager implements IConferenceCoreListener
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Vector;
+
+public class ConferenceManager implements IConferenceCoreListener, ILoggerListener
 {
 
 	private static final int JOIN_SESSION = 0;
@@ -67,7 +73,7 @@ public class ConferenceManager implements IConferenceCoreListener
 	private static final int UI_SWITCH_CONFERENCE_MODE = 10;
 	private static final int UI_PREPARE_HOLDER_USER = 11;
 	private static final int UI_READY = 12;
-	private static final String PARTICIPANT_ID_DEFAULT = ""; 
+	public static final String LOCAL_PARTICIPANT_ID_DEFAULT = ""; 
 
 	private UserSettingsManager mSettingsManager;
 	private static final String TAG = ConferenceManager.class.getSimpleName();
@@ -86,6 +92,9 @@ public class ConferenceManager implements IConferenceCoreListener
 	private ArrayList<Message> mDelayedMessages;
 	private boolean isUIReadyState = false;
 	private boolean isSdkInitialize = false;
+	private FileLogger mFileLogger = null;
+	private SurfaceView mSurfaceView = null;
+	private ParticipantSwitchListener mParticipantSwitchListener = null;
 
 	public boolean isCameraMuted() { return mIsCameraMute; }
 	
@@ -104,16 +113,16 @@ public class ConferenceManager implements IConferenceCoreListener
 		
 //		mConferenceCore = ConferenceCore.instance(mApp);
 		
-		LogSdk.i(TAG, "Init SettingsManager ");
+		Log.i(TAG, "Init SettingsManager ");
 		mSettingsManager = new UserSettingsManager(mApp);
 
-		LogSdk.i(TAG, "Init ParticipantsManager ");
+		Log.i(TAG, "Init ParticipantsManager ");
 		mParticipantsManager = new ParticipantsManager();
 
-		LogSdk.i(TAG, "Init AlertsManager ");
+		Log.i(TAG, "Init AlertsManager ");
 		AlertsManager.getInstance();
 
-		LogSdk.i(TAG, "Init ConferenceQueue ");
+		Log.i(TAG, "Init ConferenceQueue ");
 		if (mConferenceQueue == null)
 		{
 			try
@@ -128,16 +137,18 @@ public class ConferenceManager implements IConferenceCoreListener
 			}
 			catch (Exception e)
 			{
-				LogSdk.e(TAG, "", e);
+				Log.e(TAG, "", e);
 			}
 		}
 		
-		LogSdk.i(TAG, "Init done. ConferenceManager created.");
+		mFileLogger = new FileLogger();
+		
+		Log.i(TAG, "Init done. ConferenceManager created.");
 	}
 	
 	public void resetFlagSdkInited() {
 		isSdkInitialize = false;
-		LogSdk.i(TAG, "Reset InitSdk done.");
+		Log.i(TAG, "Reset InitSdk done.");
 	}
 
 	public void initConference()
@@ -149,41 +160,47 @@ public class ConferenceManager implements IConferenceCoreListener
 	private void initConferenceCore()
 	{
 		if( mConferenceCore == null) {
-			LogSdk.i(TAG, "================================== Init ConferenceCore started ====================================");
-			LogSdk.setLogLevel(Log.DEBUG);
+			Log.i(TAG, "================================== Init ConferenceCore started ====================================");
 
-			mConferenceCore = ConferenceCore.instance(mApp);
-			
+			Log.i(TAG, " Register for internal events in ConferenceCore");
+			// Register for internal events
+			mConferenceCore = ConferenceCore.instance(mApp, this);
+		}
+		
 //		try
 //		{
-//			LogSdk.i(TAG, "Set context in ConferenceCore started");
+//			Log.i(TAG, "Set context in ConferenceCore started");
 //			mConferenceCore.setContext(mApp);
-//			LogSdk.i(TAG, "Set context in ConferenceCore finished");
+//			Log.i(TAG, "Set context in ConferenceCore finished");
 //		}
 //		catch (CoreException e)
 //		{
-//			LogSdk.e(TAG, "", e);
+//			Log.e(TAG, "", e);
 //		}
 //		catch (Exception ex)
 //		{
-//			LogSdk.e(TAG, "", ex);
+//			Log.e(TAG, "", ex);
 //		}
-			LogSdk.i(TAG, " Register for internal events in ConferenceCore");
-			// Register for internal events
-			mConferenceCore.setListener(this);
-			UserSettings settings = retrieveSettings();
+		Log.i(TAG, " Register for internal events in ConferenceCore");
+		// Register for internal events
+		UserSettings settings = retrieveSettings();
 
-			ConferenceCoreError err = mConferenceCore.initSdk(settings.AppId, settings.AppToken, settings.BaseURL); 
-			LogSdk.d(TAG, "appId = " + settings.AppId + " token = " + settings.AppToken);
-			String errStr = mConferenceCore.getErrorMessageForConferenceCoreError(err);
-			isSdkInitialize = (err == ConferenceCoreError.OK);
-			if( isSdkInitialize)
-				LogSdk.i(TAG, "Init	ConferenceCore finished");
-			else
-				LogSdk.e(TAG, "Init ConferenceCore failed: " + errStr);
-		}
+		ConferenceCoreError err = mConferenceCore.initSdk(settings.AppId, settings.AppToken, settings.BaseURL); 
+		Log.d(TAG, "appId = " + settings.AppId + " token = " + settings.AppToken + " err = " + err);
+		String errStr = mConferenceCore.getErrorMessageForConferenceCoreError(err);
+		isSdkInitialize = (err == ConferenceCoreError.OK);
+		if( isSdkInitialize)
+			Log.i(TAG, "Init	ConferenceCore finished");
 		else
-			LogSdk.i(TAG, "ConferenceCore already initialized");
+			Log.e(TAG, "Init ConferenceCore failed: " + errStr);
+		
+		if (mSessionListenerList != null)
+		{
+			for (SessionListener listener : mSessionListenerList)
+			{
+				listener.onSessionInited();
+			}
+		}
 	}
 
 	public void addSessionListener(SessionListener l)
@@ -236,7 +253,7 @@ public class ConferenceManager implements IConferenceCoreListener
 		try
 		{
 			int command = msg.what;
-			LogSdk.i(Utils.getOoVooTag(), "onConferenceEvent :: " + command);
+			Log.i(Utils.getOoVooTag(), "onConferenceEvent :: " + command);
 			switch (command)
 			{
 			case JOIN_SESSION:
@@ -294,12 +311,12 @@ public class ConferenceManager implements IConferenceCoreListener
 
 					if (mDelayedMessages != null && !mDelayedMessages.isEmpty())
 					{
-						LogSdk.i(Utils.getOoVooTag(), "UI is ready :: continue with delayed messages "
+						Log.i(Utils.getOoVooTag(), "UI is ready :: continue with delayed messages "
 								+ mDelayedMessages.size());
 						for (int i = 0; i < mDelayedMessages.size(); i++)
 						{
 							Message message = mDelayedMessages.get(i);
-							LogSdk.i(Utils.getOoVooTag(), "\t\tDelayed message = " + message.what);
+							Log.i(Utils.getOoVooTag(), "\t\tDelayed message = " + message.what);
 							if (message.what == UI_PREPARE_HOLDER_USER)
 							{
 								if (message.obj != null && message.obj instanceof String[])
@@ -315,7 +332,7 @@ public class ConferenceManager implements IConferenceCoreListener
 				}
 				break;
 			case UI_PREPARE_HOLDER_USER:
-				LogSdk.i(Utils.getOoVooTag(), "UI_PREPARE_HOLDER_USER event :: isUIReadyState = " + isUIReadyState);
+				Log.i(Utils.getOoVooTag(), "UI_PREPARE_HOLDER_USER event :: isUIReadyState = " + isUIReadyState);
 
 				if (!isUIReadyState)
 					handleWithDelay(msg);
@@ -333,7 +350,7 @@ public class ConferenceManager implements IConferenceCoreListener
 		}
 		catch (Exception e)
 		{
-			LogSdk.e(TAG, "", e);
+			Log.e(TAG, "", e);
 		}
 	}
 
@@ -343,7 +360,7 @@ public class ConferenceManager implements IConferenceCoreListener
 		{
 			mDelayedMessages = new ArrayList<Message>();
 		}
-		LogSdk.i(Utils.getOoVooTag(), "HANDLE WITH DELAY " + message.what);
+		Log.i(Utils.getOoVooTag(), "HANDLE WITH DELAY " + message.what);
 		Message msg = new Message();
 		msg.what = (int) message.what;
 		msg.obj = message.obj;
@@ -364,7 +381,7 @@ public class ConferenceManager implements IConferenceCoreListener
 
 	public void joinSession()
 	{
-		LogSdk.i(Utils.getOoVooTag(), "SENDING TO QUEUE JOIN_SESSION");
+		Log.i(Utils.getOoVooTag(), "SENDING TO QUEUE JOIN_SESSION");
 
 		if (mConferenceQueue != null)
 			mConferenceQueue.sendMessage(JOIN_SESSION);
@@ -424,19 +441,31 @@ public class ConferenceManager implements IConferenceCoreListener
 
 	private void doTurnParticipantVideoOn(String id)
 	{
-		if (ConferenceCoreError.OK == mConferenceCore.receiveParticipantVideoOn(id) && mParticipantsManager.getHolder() != null)
-			mParticipantsManager.getHolder().setVideoStateOn(id, true, ParticipantHolder.VIDEO_ON);
+		Log.d( TAG, "turning participant video ON for " + id);
+		if (ConferenceCoreError.OK == mConferenceCore.receiveParticipantVideoOn(id) && mParticipantsManager.getHolder() != null) {
+			mParticipantsManager.getHolder().setVideoOn(id, true);
+		
+			if (mParticipantSwitchListener != null)
+			{
+				mParticipantSwitchListener.onParticipantVideoTurned(id, true);
+			}
+		}
 	}
 
 	private void doTurnParticipantVideoOff(String id, String displayName)
 	{
 		if( mParticipantsManager.getHolder() != null)
 		{
-			mParticipantsManager.getHolder().setVideoStateOn(id, false, ParticipantHolder.VIDEO_MUTED_BY_USER);
+			mParticipantsManager.getHolder().setVideoOn(id, false);
 			if (ConferenceCoreError.OK == mConferenceCore.receiveParticipantVideoOff(id))
 			{
 				mParticipantsManager.getHolder().turnVideoOff(id);
 				addAlert(displayName + " turned video Off", ConferenceCoreError.OK);
+				
+				if (mParticipantSwitchListener != null)
+				{
+					mParticipantSwitchListener.onParticipantVideoTurned(id, false);
+				}
 			}
 		}
 	}
@@ -445,33 +474,58 @@ public class ConferenceManager implements IConferenceCoreListener
 	{
 		try
 		{
-			LogSdk.d(TAG, "trying to set resolution " + resolution);
+			Log.d(TAG, "trying to set resolution " + resolution);
 			mConferenceCore.setCameraResolutionLevel(resolution);
 		}
 		catch (Exception ex)
 		{
-			LogSdk.e(TAG, "", ex);
+			Log.e(TAG, "", ex);
 			addAlert("Error while changing resolution", ConferenceCoreError.OK);
 		}
 	}
-
-	public void setCameraMuted(boolean muted)
-	{
+	
+	
+	public void turnCameraOn(boolean on) {
 		try
 		{
-			LogSdk.d(Utils.getOoVooTag(), "Setting camera mute to: " + muted);
-			if (!muted)
+			Log.d(Utils.getOoVooTag(), "Turn camera to: " + on);
+			if (on)
 			{
-				mConferenceCore.turnMyVideoOn();
+				mConferenceCore.turnCameraOn();
 			}
 			else
 			{
-				mConferenceCore.turnMyVideoOff();
+				mConferenceCore.turnCameraOff();
 			}
 		}
 		catch (Exception e)
 		{
-			LogSdk.e(Utils.getOoVooTag(), "An Exception thrown while calling setCameraMuted " + muted, e);
+			Log.e(Utils.getOoVooTag(), "An Exception thrown while calling turnCameraOn " + on, e);
+			addAlert("An error occured while calling turnCameraOn", ConferenceCoreError.Error);
+		}
+	}
+
+	public void setCameraMuted(final boolean muted)
+	{
+		try
+		{
+			mIsCameraMute = muted;
+			
+			Log.d(Utils.getOoVooTag(), "Setting camera mute to: " + muted);
+			if (!muted)
+			{
+				mConferenceCore.turnPreviewOn();
+				mConferenceCore.turnVideoTransmitOn();
+			}
+			else
+			{
+				mConferenceCore.turnPreviewOff();
+				mConferenceCore.turnVideoTransmitOff();
+			}
+		}
+		catch (Exception e)
+		{
+			Log.e(Utils.getOoVooTag(), "An Exception thrown while calling setCameraMuted " + muted, e);
 			addAlert("An error occured while calling turnMyVideoOn", ConferenceCoreError.Error);
 		}
 		finally
@@ -490,10 +544,10 @@ public class ConferenceManager implements IConferenceCoreListener
 	{
 		try
 		{
-			LogSdk.d(Utils.getOoVooTag(), "Setting microphone mute to: " + shouldMute);
+			Log.d(Utils.getOoVooTag(), "Setting microphone mute to: " + shouldMute);
 			ConferenceCoreError error = (shouldMute) ? mConferenceCore.turnMicrophoneOff() : mConferenceCore
 					.turnMicrophoneOn();
-			LogSdk.d(Utils.getOoVooTag(), "Setting microphone mute to: " + shouldMute + " rc = " + error);
+			Log.d(Utils.getOoVooTag(), "Setting microphone mute to: " + shouldMute + " rc = " + error);
 		}
 		catch (Exception e)
 		{
@@ -515,10 +569,10 @@ public class ConferenceManager implements IConferenceCoreListener
 	{
 		try
 		{
-			LogSdk.d(Utils.getOoVooTag(), "Setting speaker mute to: " + shouldMute);
+			Log.d(Utils.getOoVooTag(), "Setting speaker mute to: " + shouldMute);
 			ConferenceCoreError error = (shouldMute) ? mConferenceCore.turnSpeakerOff() : mConferenceCore
 					.turnSpeakerOn();
-			LogSdk.d(Utils.getOoVooTag(), "Setting speaker mute to: " + shouldMute + " rc = " + error);
+			Log.d(Utils.getOoVooTag(), "Setting speaker mute to: " + shouldMute + " rc = " + error);
 		}
 		catch (Exception e)
 		{
@@ -538,7 +592,6 @@ public class ConferenceManager implements IConferenceCoreListener
 
 	public void doEndOfCall()
 	{
-		// ConferenceCore.instance().turnMyVideoOff();
 		isUIReadyState = false;
 		mConferenceCore.leaveConference(ConferenceCoreError.OK);
 		if (mSessionListenerList != null)
@@ -557,7 +610,7 @@ public class ConferenceManager implements IConferenceCoreListener
 		settings.Resolution = CameraResolutionLevel.ResolutionMedium;
 		persistSettings(settings);
 		
-		LogSdk.i(TAG, "Reset Camera Resolution Level to " + settings.Resolution);
+		Log.i(TAG, "Reset Camera Resolution Level to " + settings.Resolution);
 		
 		String conferenceID = settings.SessionID;
 		String displayName = settings.DisplayName;
@@ -572,7 +625,7 @@ public class ConferenceManager implements IConferenceCoreListener
 			}
 			return;
 		}
-		LogSdk.d(Utils.getOoVooTag(), "trying to join session " + conferenceID);
+		Log.d(Utils.getOoVooTag(), "trying to join session " + conferenceID);
 
 //		if (!isSdkInitialize)
 //		{
@@ -580,8 +633,8 @@ public class ConferenceManager implements IConferenceCoreListener
 //					(mConferenceCore.initSdk(settings.AppId, settings.AppToken, settings.BaseURL) == ConferenceCoreError.OK);
 //		}
 		
-		ConferenceCoreError error = mConferenceCore.joinConference(conferenceID, PARTICIPANT_ID_DEFAULT, displayName);
-		LogSdk.d(Utils.getOoVooTag(), "JoinSession rc = " + error);
+		ConferenceCoreError error = mConferenceCore.joinConference(conferenceID, LOCAL_PARTICIPANT_ID_DEFAULT, displayName);
+		Log.d(Utils.getOoVooTag(), "JoinSession rc = " + error);
 		AlertsManager.getInstance().clearAlerts();
 		switch (error)
 		{
@@ -597,34 +650,10 @@ public class ConferenceManager implements IConferenceCoreListener
 			}
 			mConferenceCore.leaveConference(ConferenceCoreError.OK);
 			break;
+			
 		case ConferenceIdNotValid:
-			if (mSessionListenerList != null)
-			{
-				for (SessionListener listener : mSessionListenerList)
-				{
-					listener.onJoinSessionError(error);
-				}
-			}
-			break;
 		case ClientIdNotValid:
-			if (mSessionListenerList != null)
-			{
-				for (SessionListener listener : mSessionListenerList)
-				{
-					listener.onJoinSessionError(error);
-				}
-			}
-			;
-			break;
 		case ServerAddressNotValid:
-			if (mSessionListenerList != null)
-			{
-				for (SessionListener listener : mSessionListenerList)
-				{
-					listener.onJoinSessionError(error);
-				}
-			}
-			break;
 		default:
 			if (mSessionListenerList != null)
 			{
@@ -640,16 +669,25 @@ public class ConferenceManager implements IConferenceCoreListener
 	private void doLeaveSession()
 	{
 		ConferenceCoreError rc = mConferenceCore.leaveConference(ConferenceCoreError.OK);
-		LogSdk.d(Utils.getOoVooTag(), "Leave session rc = " + rc);
+		Log.d(Utils.getOoVooTag(), "Leave session rc = " + rc);
 	}
 
 	@Override
-	public void OnMyVideoTurnedOff(ConferenceCoreError errorCode)
-	{
-		if( errorCode == ConferenceCoreError.OK)
-			mIsCameraMute = true;
-		
-		LogSdk.d(Utils.getOoVooTag(), "received OnCameraUnmuted (JAVA) error = " + errorCode + " isCameraMuted = " + mIsCameraMute);
+	public void OnVideoTransmitTurnedOff(ConferenceCoreError errorCode) {
+
+		addAlert("My video transmit turned off", errorCode);
+	}
+
+	@Override
+	public void OnVideoTransmitTurnedOn(ConferenceCoreError errorCode) {
+
+		addAlert("My video transmit turned on", errorCode);	
+	}
+	
+	@Override
+	public void OnPreviewTurnedOff(ConferenceCoreError errorCode)
+	{	
+		Log.d(Utils.getOoVooTag(), "received OnCameraUnmuted (JAVA) error = " + errorCode + " isCameraMuted = " + mIsCameraMute);
 		
 		if (mSessionControlsListenerList != null)
 		{
@@ -659,41 +697,27 @@ public class ConferenceManager implements IConferenceCoreListener
 			}
 		}
 		
-		addAlert("My video turned off", errorCode);
+		addAlert("My preview turned off", errorCode);	
 	}
 
 	@Override
-	public void OnMyVideoTurnedOn(ConferenceCoreError errorCode, FrameSize frameSize, int fps)
+	public void OnCameraTurnedOn(ConferenceCoreError errorCode, FrameSize frameSize, int fps)
 	{
-		LogSdk.d(Utils.getOoVooTag(), "received OnCameraUnmuted (JAVA) error = " + errorCode);
+		Log.d(Utils.getOoVooTag(), "received OnCameraUnmuted (JAVA) error = " + errorCode);
 		
-		String sParticipantId = "";
+		mIsCameraMute = false;
 		
-		if( errorCode == ConferenceCoreError.OK) 
-		{
-			mIsCameraMute = false;
-
-			VideoChannelPtr in = ConferenceCore.instance().getVideoChannelForUser( sParticipantId);
-			if( in == null) {
-				LogSdk.w(TAG, "The incoming channel for participant " + sParticipantId + " is NULL!!!");
-				return;
-			}
-			
-			if ( mParticipantsManager.getHolder() != null && mParticipantsManager.getHolder().turnVideoOn( sParticipantId, in))
-				LogSdk.d(TAG, "OnMyVideoTurnedOn: video is ON for " + sParticipantId );
-		} 
-		
-		LogSdk.d(Utils.getOoVooTag(), "received OnCameraUnmuted (JAVA) error = " + errorCode + " isCameraMuted = " + mIsCameraMute);
+	    mConferenceCore.turnPreviewOn();
 		
 		if (mSessionControlsListenerList != null)
 		{
 			for (SessionControlsListener listener : mSessionControlsListenerList)
 			{
-				listener.onSetCameraMuted(mIsCameraMute);
+				listener.onCameraOn();
 			}
 		}
 		
-		addAlert("My video turned on. Video format: width=" + frameSize.Width + " height=" + frameSize.Height +
+		addAlert("Camera turned on. Video format: width=" + frameSize.Width + " height=" + frameSize.Height +
 				" fps=" + fps, errorCode);
 	}
 
@@ -795,14 +819,14 @@ public class ConferenceManager implements IConferenceCoreListener
 		int participantViewId = -1;
 		try
 		{
-			LogSdk.i(Utils.getOoVooTag(),
+			Log.i(Utils.getOoVooTag(),
 					"ConferenceManager.OnParticipantJoinedSession - adding participant to holder " + sOpaqueString
 							+ " -> started");
 			mParticipantsManager.onParticipantJoinedSession(sParticipantId, sOpaqueString);
 
 			// if (mParticipantsManager.getHolder().getNumOfVideosOn() <
 			// ParticipantsManager.MAX_ACTIVE_PARTICIPANTS_IN_CALL) {
-			// LogSdk.d(Utils.getOoVooTag(),
+			// Log.d(Utils.getOoVooTag(),
 			// "ConferenceManager.OnParticipantJoinedSession - turning video on for "
 			// + sParticipantId);
 			// if (ConferenceCoreError.OK == mConferenceCore
@@ -811,7 +835,7 @@ public class ConferenceManager implements IConferenceCoreListener
 			// sParticipantId, true);
 			// participantViewId = mParticipantsManager.getHolder()
 			// .getViewIdByParticipant(sParticipantId);
-			// LogSdk.d(Utils.getOoVooTag(),
+			// Log.d(Utils.getOoVooTag(),
 			// "ConferenceManager.OnParticipantJoinedSession - participantViewId = "
 			// + participantViewId);
 			// }
@@ -819,7 +843,7 @@ public class ConferenceManager implements IConferenceCoreListener
 		}
 		catch (Exception ex)
 		{
-			LogSdk.e(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - An Exception:", ex);
+			Log.e(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - An Exception:", ex);
 		}
 		finally
 		{
@@ -843,30 +867,30 @@ public class ConferenceManager implements IConferenceCoreListener
 		int participantViewId = -1;
 		try
 		{
-			LogSdk.i(Utils.getOoVooTag(),
+			Log.i(Utils.getOoVooTag(),
 					"ConferenceManager.prepareParticipantActiveRender - adding participant to holder " + sParticipantId
 							+ " -> started");
 			participantViewId = mParticipantsManager.prepareParticipantAsActiveRender(sParticipantId);
 
-			LogSdk.i(Utils.getOoVooTag(),
+			Log.i(Utils.getOoVooTag(),
 					"ConferenceManager.prepareParticipantActiveRender - adding participant to holder "
 							+ participantViewId + " <- finished");
 			if (participantViewId != -1)
 			{
-				LogSdk.i(Utils.getOoVooTag(),
+				Log.i(Utils.getOoVooTag(),
 						"ConferenceManager.prepareParticipantActiveRender - turning video on for " + sParticipantId);
 				if (!mParticipantsManager.getHolder().isFullMode()
 						&& ConferenceCoreError.OK == mConferenceCore.receiveParticipantVideoOn(sParticipantId))
 				{
-					mParticipantsManager.getHolder().setVideoStateOn(sParticipantId, true, ParticipantHolder.VIDEO_ON);
-					LogSdk.i(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - participantViewId = "
+					mParticipantsManager.getHolder().setVideoOn(sParticipantId, true);
+					Log.i(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - participantViewId = "
 							+ participantViewId);
 				}
 			}
 		}
 		catch (Exception ex)
 		{
-			LogSdk.e(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - An Exception:", ex);
+			Log.e(Utils.getOoVooTag(), "ConferenceManager.OnParticipantJoinedSession - An Exception:", ex);
 		}
 		finally
 		{
@@ -879,34 +903,90 @@ public class ConferenceManager implements IConferenceCoreListener
 			}
 		}
 	}
+	
+	private SurfaceView createSurfaceView() {
+		if (mSurfaceView == null) {
+			mSurfaceView = new SurfaceView(mApp);
+			WindowManager.LayoutParams params = new WindowManager.LayoutParams();
+			params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+			params.type = WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
+			params.gravity = Gravity.TOP | Gravity.LEFT;
+			params.width = 1;
+			params.height = 1;
+			WindowManager wmgr = (WindowManager) mApp.getSystemService(Context.WINDOW_SERVICE);
+			wmgr.addView(mSurfaceView, params);
+		}
+		
+		return mSurfaceView;
+	}
 
-	public void resumeSession()
-	{
-		LogSdk.d(Utils.getOoVooTag(), "Resume event from UI - resumeSession");
+	public void resumePreviewSession() {
 		try
 		{
-			LogSdk.d(Utils.getOoVooTag(), "setting preview video surface");
-			SurfaceView view = (mSessionUIPresenter == null) ? null : mSessionUIPresenter.getPreviewSurface();
-			LogSdk.e(Utils.getOoVooTag(), (view == null) ? "Surface is null" : "Surface is not null");
+			Log.d(Utils.getOoVooTag(), "setting preview video surface");
+			SurfaceView view = createSurfaceView();
+			if (view == null)
+				Log.e(Utils.getOoVooTag(), "Surface is null");
+			else
+				Log.i(Utils.getOoVooTag(), "Surface is not null");
 			mConferenceCore.setPreviewSurface(view);
 			mConferenceCore.resume();
 		}
 		catch (Exception e)
 		{
-			LogSdk.e(TAG, "", e);
+			Log.e(TAG, "resumePreviewSession Error:", e);
+		}
+	}
+	
+	public void resumeSession()
+	{
+		Log.d(Utils.getOoVooTag(), "Resume event from UI - resumeSession");
+		try
+		{
+			Log.d(Utils.getOoVooTag(), "setting preview video surface");
+			SurfaceView view = createSurfaceView();
+			if (view == null)
+				Log.e(Utils.getOoVooTag(), "Surface is null");
+			else
+				Log.i(Utils.getOoVooTag(), "Surface is not null");
+			mConferenceCore.setPreviewSurface(view);
+			mConferenceCore.resume();
+
+			MediaDevice dev = mConferenceCore.getMediaDevice(
+					DeviceType.Microphone, -1);
+			if (dev != null) {
+				Log.d(Utils.getOoVooTag(), "Microphone info: " + dev.toString());
+				mIsMicrophoneMute = (dev.State != DeviceState.ON);
+			}
+
+			dev = mConferenceCore.getMediaDevice(DeviceType.Speaker, -1);
+			if (dev != null) {
+				Log.d(Utils.getOoVooTag(), "Speaker info: " + dev.toString());
+				mAreSpeakersMute = (dev.State != DeviceState.ON);
+			}
+
+			dev = mConferenceCore.getMediaDevice(DeviceType.Camera, -1);
+			if (dev != null) {
+				Log.d(Utils.getOoVooTag(), "Camera info: " + dev.toString());
+				// mIsCameraMute = (dev.State != DeviceState.ON);
+			}
+		}
+		catch (Exception e)
+		{
+			Log.e(TAG, "resumeSession Error:", e);
 		}
 	}
 
 	public void pauseSession()
 	{
-		LogSdk.d(Utils.getOoVooTag(), "Pause event from UI - pauseSession");
+		Log.d(Utils.getOoVooTag(), "Pause event from UI - pauseSession");
 		try
 		{
 			mConferenceCore.pause();
 		}
 		catch (Exception e)
 		{
-			LogSdk.e(TAG, "", e);
+			Log.e(TAG, "", e);
 		}
 	}
 
@@ -921,12 +1001,12 @@ public class ConferenceManager implements IConferenceCoreListener
 			if (mSessionUIPresenter != null)
 				mSessionUIPresenter.initSurfaces();
 
-			LogSdk.d(Utils.getOoVooTag(), "ParticipantsManager.getInstance().getParticipants().size() = "
+			Log.d(Utils.getOoVooTag(), "ParticipantsManager.getInstance().getParticipants().size() = "
 					+ mParticipantsManager.getParticipants().size());
 			for (Participant participant : mParticipantsManager.getParticipants())
 			{
 				int participantViewId = mParticipantsManager.getHolder().getViewIdByParticipant(participant.getId());
-				LogSdk.d(Utils.getOoVooTag(), "onResume - participantViewId =" + participantViewId + " participantId " + participant.getId());
+				Log.d(Utils.getOoVooTag(), "onResume - participantViewId =" + participantViewId + " participantId " + participant.getId());
 				if (participantViewId != -1)
 				{
 					if (mSessionUIPresenter != null)
@@ -935,12 +1015,15 @@ public class ConferenceManager implements IConferenceCoreListener
 				}
 			}
 		}
+		
+		turnCameraOn(true);
 	}
 
 	public void onPause()
 	{
-		LogSdk.d(Utils.getOoVooTag(), "ConferenceManager - onPause");
+		Log.d(Utils.getOoVooTag(), "ConferenceManager - onPause");
 		mParticipantsManager.getHolder().Pause();
+		turnCameraOn(false);
 		addAlert("onPause", ConferenceCoreError.OK);
 	}
 
@@ -954,22 +1037,24 @@ public class ConferenceManager implements IConferenceCoreListener
 			{
 				if (numOfVidOn < ParticipantsManager.MAX_ACTIVE_PARTICIPANTS_IN_CALL)
 				{
-					LogSdk.d(Utils.getOoVooTag(), "turning ParticipantVideoOn for " + participant.getDisplayName());
+					Log.d(Utils.getOoVooTag(), "turning ParticipantVideoOn for " + participant.getDisplayName() + "(" + participant.getId() + ")");
+					if (participant.getId().isEmpty())
+						continue;
+					
 					if (ConferenceCoreError.OK == mConferenceCore.receiveParticipantVideoOn(participant.getId()))
 					{
-						LogSdk.d(Utils.getOoVooTag(), "setting VideoStateOn for " + participant.getDisplayName());
-						mParticipantsManager.getHolder().setVideoStateOn(participant.getId(), true,
-								ParticipantHolder.VIDEO_ON);
+						Log.d(Utils.getOoVooTag(), "setting VideoStateOn for " + participant.getDisplayName());
+						mParticipantsManager.getHolder().setVideoOn(participant.getId(), true);
 					}
 				}
 			}
-			setCameraMuted(false);
+
 			setMicrophoneMuted(false);
 			setSpeakersMuted(false);
 		}
 		catch (Exception e)
 		{
-			LogSdk.e(TAG, "", e);
+			Log.e(TAG, "", e);
 		}
 	}
 
@@ -978,10 +1063,28 @@ public class ConferenceManager implements IConferenceCoreListener
 		try
 		{
 			UserSettings settings = retrieveSettings();
+			((ConferenceCore) mConferenceCore).setLogListener(this, settings.CurrentLogLevel);
+			
+			if(mConferenceCore == null){
+				addAlert("set configuration before initialization", ConferenceCoreError.InvalidOperation);
+				return;
+			}
+			
 			mConferenceCore.selectCamera(settings.CameraType);
 			mConferenceCore.setCameraResolutionLevel( CameraResolutionLevel.ResolutionMedium); //settings.Resolution);
-			mConferenceCore.selectMicrophone(settings.MicrophoneType);
+			ConferenceCoreError err = mConferenceCore.selectMicrophone(settings.MicrophoneType);
+			if( err == ConferenceCoreError.DeviceNotFound) {
+				MediaDevice mic = mConferenceCore.getMediaDevice(DeviceType.Microphone, -1); // search default one
+				if( mic != null) {
+					err = mConferenceCore.selectMicrophone(mic.getId());
+					if( err == ConferenceCoreError.OK) {
+						settings.MicrophoneType = mic.getId();
+						persistSettings(settings);
+					}
+				}
+			}
 			mConferenceCore.selectSpeaker(settings.SpeakersType);
+			
 		}
 		catch (Exception e)
 		{
@@ -999,14 +1102,14 @@ public class ConferenceManager implements IConferenceCoreListener
 	public void OnJoinConference(ConferenceCoreError errorCode, String mySessionId)
 	{
 		if (errorCode == ConferenceCoreError.OK)
-		{
+		{			
 			AudioManager mgr = (AudioManager) mApp.getSystemService(Context.AUDIO_SERVICE);
 
 			if( mgr != null)
 			{
 				mgr.setMode(AudioManager.MODE_IN_COMMUNICATION);
 
-				LogSdk.d(TAG, "Audio for API level is " + Build.VERSION.SDK_INT);
+				Log.d(TAG, "Audio for API level is " + Build.VERSION.SDK_INT);
 				
 				String frames_prop = "1";
 				String sample_rate_prop = "1";
@@ -1027,11 +1130,11 @@ public class ConferenceManager implements IConferenceCoreListener
 				int rencodingMode = AudioFormat.ENCODING_PCM_16BIT;
 				int rbufferSize = AudioRecord.getMinBufferSize(rnat_rate, rchannelMode, rencodingMode);
 
-				LogSdk.d(TAG, "AudioPlayer Frames per buffer: " + frames_prop + ", sample rate: " + sample_rate_prop + 
+				Log.d(TAG, "AudioPlayer Frames per buffer: " + frames_prop + ", sample rate: " + sample_rate_prop + 
 						", low latency: " + low_prop);
-				LogSdk.d(TAG, "Audio Player   (rate, channel, encoding, bufSize): " + nat_rate + ", " + channelMode + ", " + encodingMode + ", " + bufferSize);
-				LogSdk.d(TAG, "Audio Recorder (rate, channel, encoding, bufSize): " + rnat_rate + ", " + rchannelMode + ", " + rencodingMode + ", " + rbufferSize);
-				LogSdk.d(TAG, "Audio duration: " + Integer.parseInt(frames_prop) * 1000 / Integer.parseInt(sample_rate_prop) );
+				Log.d(TAG, "Audio Player   (rate, channel, encoding, bufSize): " + nat_rate + ", " + channelMode + ", " + encodingMode + ", " + bufferSize);
+				Log.d(TAG, "Audio Recorder (rate, channel, encoding, bufSize): " + rnat_rate + ", " + rchannelMode + ", " + rencodingMode + ", " + rbufferSize);
+				Log.d(TAG, "Audio duration: " + Integer.parseInt(frames_prop) * 1000 / Integer.parseInt(sample_rate_prop) );
 				
 			}
 			addAlert("Joined Session myId = " + mySessionId, errorCode);
@@ -1055,7 +1158,7 @@ public class ConferenceManager implements IConferenceCoreListener
 	@Override
 	public void OnConferenceError(ConferenceCoreError errorCode)
 	{
-		LogSdk.d(Utils.getOoVooTag(), "OnSessionError - recieved error:" + errorCode);
+		Log.d(Utils.getOoVooTag(), "OnSessionError - recieved error:" + errorCode);
 		if (mSessionListenerList != null)
 		{
 			for (SessionListener listener : mSessionListenerList)
@@ -1074,7 +1177,7 @@ public class ConferenceManager implements IConferenceCoreListener
 		
 		try
 		{
-			LogSdk.i(Utils.getOoVooTag(), "ConferenceManager.OnParticipantVideoReceiveOn : " + sParticipantId + "; "
+			Log.i(Utils.getOoVooTag(), "ConferenceManager.OnParticipantVideoReceiveOn : " + sParticipantId + "; "
 					+ frameSize.toString() + " {" + errorCode + "}");
 
 			VideoChannelPtr in = mConferenceCore.getVideoChannelForUser(sParticipantId);
@@ -1096,13 +1199,13 @@ public class ConferenceManager implements IConferenceCoreListener
 				}
 			}
 			else {
-				LogSdk.e(TAG, "No video channel found for user: " + sParticipantId);
+				Log.e(TAG, "No video channel found for user: " + sParticipantId);
 				errorCode = ConferenceCoreError.ClientIdNotValid;
 			}
 		}
 		catch (Exception ex)
 		{
-			LogSdk.e(Utils.getOoVooTag(),
+			Log.e(Utils.getOoVooTag(),
 					"ConferenceManager.OnParticipantVideoReceiveOn - an Exception occured:", ex);
 			errorCode = ConferenceCoreError.Error;
 		}
@@ -1225,7 +1328,7 @@ public class ConferenceManager implements IConferenceCoreListener
 	public void OnConnectionStatisticsUpdate(ConnectionStatistics connectionStatistics)
 	{
 		DecimalFormat df = new DecimalFormat("#.##");
-		LogSdk.d(Utils.getOoVooTag(),
+		Log.d(Utils.getOoVooTag(),
 				"Connection Statistics Update. InboundBandwidth=" + connectionStatistics.InboundBandwidth * 8 / 1024
 						+ "Kbps InboundPacketLoss=" + df.format(connectionStatistics.InboundPacketLoss)
 						+ "% OutboundPacketLoss=" + connectionStatistics.OutboundPacketLoss + "%");
@@ -1279,7 +1382,7 @@ public class ConferenceManager implements IConferenceCoreListener
 			{
 				devices.add(new MediaDeviceWrapper(mediaDevice.getId(), mediaDevice.getDisplayName()));
 			}
-			LogSdk.d(Utils.getOoVooTag(), "GetDeviceList: " + devices.toString());
+			Log.d(Utils.getOoVooTag(), "GetDeviceList: " + devices.toString());
 		}
 		return devices;
 	}
@@ -1329,14 +1432,19 @@ public class ConferenceManager implements IConferenceCoreListener
 			}
 			mSessionControlsListenerList = null;
 
+			if (mFileLogger != null) {
+				mFileLogger.Stop();
+			}
+			mFileLogger = null;
+			
 			mSessionUIPresenter = null;
 			mConferenceCore = null;
 			instance = null;
-			mApp = null;
+			mApp = null;			
 		}
 		catch (Exception ex)
 		{
-			LogSdk.e(TAG, "", ex);
+			Log.e(TAG, "", ex);
 		}
 	}
 
@@ -1354,6 +1462,8 @@ public class ConferenceManager implements IConferenceCoreListener
 		public void onSessionError(ConferenceCoreError error);
 
 		public void onLeftSession(ConferenceCoreError error);
+		
+		public void onSessionInited();
 	}
 
 	public static interface SessionParticipantsListener
@@ -1376,7 +1486,8 @@ public class ConferenceManager implements IConferenceCoreListener
 
 	public static interface SessionControlsListener
 	{
-
+		public void onCameraOn();
+		
 		public void onSetCameraMuted(boolean isMuted);
 
 		public void onSetMicrophoneMuted(boolean isMuted);
@@ -1389,6 +1500,15 @@ public class ConferenceManager implements IConferenceCoreListener
 
 		public void onSetSpeakersEnabled(boolean isEnabled);
 	}
+	
+	public static interface ParticipantSwitchListener
+	{
+		public void onParticipantVideoTurned(String participantId, boolean isOn);
+	}
+	
+	public void setParticipantSwitchListener(ParticipantSwitchListener listener) {
+		mParticipantSwitchListener = listener;
+	}
 
 	public ParticipantsManager getParticipantsManager()
 	{
@@ -1397,16 +1517,16 @@ public class ConferenceManager implements IConferenceCoreListener
 
 	void addAlert(final String alert, final ConferenceCoreError errorCode)
 	{
+		String a = new String();
 		// prints the alert or the error code if it is not OK
 		if (errorCode != ConferenceCoreError.OK)
 		{
-			AlertsManager.getInstance().addAlert(
-					Utils.getCurrentMethodName(1) + " recieved error: " + errorCode.toString() + "-" + mConferenceCore.getErrorMessageForConferenceCoreError(errorCode));
+			a = Utils.getCurrentMethodName(1) + 
+					" recieved error: " + errorCode + " on ";
 		}
-		else
-		{
-			AlertsManager.getInstance().addAlert(alert);
-		}
+	
+		a += alert;
+		AlertsManager.getInstance().addAlert(alert);
 	}
 
 	@Override
@@ -1423,9 +1543,20 @@ public class ConferenceManager implements IConferenceCoreListener
 
 	public void setActiveFilter(String id) {
 		addAlert("Set Active Filter to " + id, ConferenceCoreError.OK);
-		mConferenceCore.setActiveFilter(id);
+		if (isUIReadyState) {
+			mConferenceCore.setActiveFilter(id);
+		}
 	}
 	
+	public String getActiveFilter() {
+		if( mConferenceCore == null)
+			mConferenceCore = ConferenceCore.instance(mApp);
+		
+		String id = mConferenceCore.getActiveFilter();
+		addAlert("Get Active Filter to " + id, ConferenceCoreError.OK);
+		return id;
+	}
+
 	public boolean inCallMessagesPermitted() {
 		return mConferenceCore.inCallMessagesPermitted();
 	}
@@ -1454,4 +1585,79 @@ public class ConferenceManager implements IConferenceCoreListener
 		return mConferenceCore.getErrorMessageForConferenceCoreError(error);
 	}
 
+	/**
+	 * Fired on Incoming phone Call ON/OFF
+	 * 
+	 * @param reason
+	 */
+	public void OnHold(String reason)
+	{
+		addAlert( "On hold by reason: " + reason, ConferenceCoreError.OK);
+	}
+
+	public void OnUnHold(String reason)
+	{
+		addAlert( "On hold done. reason: " + reason, ConferenceCoreError.OK);
+	}
+	
+	public void OnLog(LogLevel level, String tag, String message)
+	{
+		mFileLogger.OnLog(level, tag, message);
+	}
+
+	public boolean isMicMuted() {
+		return mIsMicrophoneMute;
+	}
+
+	public boolean isSpeakerMuted() {
+		return mAreSpeakersMute;
+	}
+
+	@Override
+	public void OnCameraTurnedOff(ConferenceCoreError errorCode) {
+		LogSdk.d(TAG, "OnCameraTurneedOff rc = " + errorCode);
+		if (mSessionControlsListenerList != null)
+		{
+			for (SessionControlsListener listener : mSessionControlsListenerList)
+			{
+				listener.onSetCameraMuted(mIsCameraMute);
+			}
+		}
+		addAlert("Camera turned off.", errorCode);
+	}
+
+	@Override
+	public void OnPreviewTurnedOn(ConferenceCoreError errorCode) {
+		LogSdk.d(TAG, "OnPreviewTurnedOn rc = " + errorCode);
+		
+		String sParticipantId = "";
+		
+		if( errorCode == ConferenceCoreError.OK) 
+		{
+			VideoChannelPtr in = ConferenceCore.instance().getVideoChannelForUser( sParticipantId);
+			if( in == null) {
+				Log.w(TAG, "The incoming channel for participant " + sParticipantId + " is NULL!!!");
+				return;
+			}
+			
+			if ( mParticipantsManager.getHolder() != null && mParticipantsManager.getHolder().turnVideoOn( sParticipantId, in))
+				Log.d(TAG, "OnMyVideoTurnedOn: video is ON for " + sParticipantId );
+		} 
+		
+		Log.d(Utils.getOoVooTag(), "received OnCameraUnmuted (JAVA) error = " + errorCode + " isCameraMuted = " + mIsCameraMute);
+		
+		if (mSessionControlsListenerList != null)
+		{
+			for (SessionControlsListener listener : mSessionControlsListenerList)
+			{
+				listener.onSetCameraMuted(mIsCameraMute);
+			}
+		}
+		
+		addAlert("My preview turned on. ", errorCode);
+	}
+
+	public boolean isSdkInitialized() {
+		return isSdkInitialize;
+	}
 }

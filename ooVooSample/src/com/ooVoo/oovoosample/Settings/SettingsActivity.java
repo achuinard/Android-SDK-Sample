@@ -7,8 +7,6 @@
 //
 package com.ooVoo.oovoosample.Settings;
 
-import java.util.List;
-
 import android.app.ActionBar;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -23,6 +21,9 @@ import android.widget.TextView;
 
 import com.ooVoo.oovoosample.ConferenceManager;
 import com.ooVoo.oovoosample.R;
+import com.oovoo.core.IConferenceCore.LogLevel;
+
+import java.util.List;
 
 // Settings presenter entity
 public class SettingsActivity extends Activity {
@@ -107,6 +108,16 @@ public class SettingsActivity extends Activity {
 
 		Spinner speakersSpinner = (Spinner) findViewById(R.id.speakersSpinner);
 		setSpinnerValues(speakersSpinner, mConferenceManager.getSpeakers());
+		
+		// Set log spinner
+		Spinner logSpinner = (Spinner) findViewById(R.id.logLevelSpinner);
+		ArrayAdapter<String> logAdapter;
+		String[] logLevelValues = {LogLevel.None.toString(), LogLevel.Fatal.toString(), LogLevel.Error.toString(), LogLevel.Warning.toString(),
+				LogLevel.Info.toString(), LogLevel.Debug.toString(), LogLevel.Trace.toString()};
+		logAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, logLevelValues);
+		logSpinner.setAdapter(logAdapter);
+		int logSpinnerPosition = logAdapter.getPosition(mConferenceManager.retrieveSettings().CurrentLogLevel.toString());
+		logSpinner.setSelection(logSpinnerPosition);
 
 		// Set spinners
 		setSelectedSpinnerValue(cameraSpinner, new MediaDeviceWrapper(
@@ -136,12 +147,14 @@ public class SettingsActivity extends Activity {
 		Spinner cameraSpinner = (Spinner) findViewById(R.id.cameraSpinner);
 		Spinner microphoneSpinner = (Spinner) findViewById(R.id.microphoneSpinner);
 		Spinner speakersSpinner = (Spinner) findViewById(R.id.speakersSpinner);
-
+		Spinner logSpinner = (Spinner)findViewById(R.id.logLevelSpinner);
+		
 		UserSettings settingsToPersist = mConferenceManager.retrieveSettings();
 		
 		String baseUrlStr = baseUrl.getText().toString();
 		String appId = mAppIdView.getText().toString();
 		String appToken = mTokenTextView.getText().toString();
+		String logLevel = (String) logSpinner.getSelectedItem();
 		
 		if (!settingsToPersist.BaseURL.equalsIgnoreCase(baseUrlStr) ||
 			!settingsToPersist.AppId.equals(appId) ||
@@ -161,6 +174,8 @@ public class SettingsActivity extends Activity {
 		
 		MediaDeviceWrapper speakersWrapper = getSelectedSpinnerValue(speakersSpinner);
 		settingsToPersist.SpeakersType = speakersWrapper == null ? 0 : speakersWrapper.getDeviceId();
+		
+		settingsToPersist.CurrentLogLevel = LogLevel.fromString(logLevel);
 		
 		mConferenceManager.persistSettings(settingsToPersist);
 		

@@ -7,12 +7,12 @@
 //
 package com.ooVoo.oovoosample.util;
 
-import java.util.ArrayList;
-
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import com.oovoo.core.Utils.LogSdk;
+import android.util.Log;
+
+import java.util.ArrayList;
 
 
 public class CommandQueued extends Thread {
@@ -420,30 +420,30 @@ public class CommandQueued extends Thread {
 	 * Send to standard err out a message
 	 * */
 	public void log(String log) {
-		LogSdk.i(TAG, log);
+		Log.i(TAG, log);
 	}
 
 	public void logD(String log) {
-		LogSdk.d(TAG, log);
+		Log.d(TAG, log);
 	}
 
 	public void logW(String log) {
-		LogSdk.w(TAG, log);
+		Log.w(TAG, log);
 	}
 	
 	public void logW(String log, Exception ex) {
-		LogSdk.w(TAG, log, ex);
+		Log.w(TAG, log, ex);
 	}
 	
 	public void logE(String log) {
-		LogSdk.e(TAG, log);
+		Log.e(TAG, log);
 	}
 
 	public void log(String log, Exception err) {
-		LogSdk.e(TAG, log, err);
+		Log.e(TAG, log, err);
 	}
 
 	public void log(String log, Throwable err) {
-		LogSdk.e(TAG, log, err);
+		Log.e(TAG, log, err);
 	}
 }

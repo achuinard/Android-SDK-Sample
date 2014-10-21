@@ -1,13 +1,7 @@
-//
-// UserSettings.java
-// 
-// Created by ooVoo on July 22, 2013
-//
-// © 2013 ooVoo, LLC.  Used under license. 
-//
 package com.ooVoo.oovoosample.Settings;
 
 import com.oovoo.core.IConferenceCore.CameraResolutionLevel;
+import com.oovoo.core.IConferenceCore.LogLevel;
 
 
 // Represents a user settings instance, filled by the Settings module
@@ -23,6 +17,7 @@ public class UserSettings
 	public int MicrophoneType;
 	public int SpeakersType;
 	public CameraResolutionLevel Resolution;
+	public LogLevel CurrentLogLevel = LogLevel.Debug;
 	@Override
 	public boolean equals(Object o) 
 	{
@@ -50,7 +45,8 @@ public class UserSettings
 			   (CameraType == toCompare.CameraType) &&
 			   (MicrophoneType == toCompare.MicrophoneType) &&
 			   (SpeakersType == toCompare.SpeakersType)&&
-			   (Resolution==toCompare.Resolution);
+			   (Resolution==toCompare.Resolution)&&
+			   (CurrentLogLevel==toCompare.CurrentLogLevel);
 	}
 	
 	@Override
@@ -66,6 +62,7 @@ public class UserSettings
 		description += "Microphone Type = " + MicrophoneType + System.getProperty("line.separator");
 		description += "Speakers Type = " + SpeakersType + System.getProperty("line.separator");
 		description += "Resolution = " + Resolution + System.getProperty("line.separator");
+		description += "Log Level = " + CurrentLogLevel + System.getProperty("line.separator");
 		return description;
 	}
 	
@@ -88,6 +85,7 @@ public class UserSettings
 		clone.UserID=this.UserID;
 		clone.Resolution=this.Resolution;
 		clone.DisplayName=this.DisplayName;
+		clone.CurrentLogLevel=this.CurrentLogLevel;
 		return clone;
 		
 	}

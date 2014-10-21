@@ -23,6 +23,7 @@ public class ParticipantVideoSurface extends FrameLayout {
 	public enum States {
 		STATE_NONE,
 		STATE_EMPTY,
+		STATE_PAUSED,
 	    STATE_AVATAR,
 	    STATE_VIDEO
 	}
@@ -66,6 +67,7 @@ public class ParticipantVideoSurface extends FrameLayout {
 	public void showAvatar() {
 		avatar.setVisibility(ImageView.VISIBLE);
 		mVideoView.setVisibility(GLSurfaceView.INVISIBLE);
+		nameBox.setVisibility(TextView.VISIBLE);
 	}
 	
 	public void showUserStatusInfo(){
@@ -86,7 +88,8 @@ public class ParticipantVideoSurface extends FrameLayout {
 	public void showVideo() {
 		if (avatar.getId() != R.id.myAvatar) avatar.setVisibility(ImageView.INVISIBLE);
 		if (mVideoView.getId() != R.id.myVideoSurface) mVideoView.setVisibility(GLSurfaceView.VISIBLE);
-		mVideoInfo.setVisibility(View.GONE);
+		if (mVideoInfo != null) mVideoInfo.setVisibility(View.GONE);
+		if (nameBox != null) nameBox.setVisibility(TextView.VISIBLE);
 	}
 
 	public void setName(String sParticipantId) {
